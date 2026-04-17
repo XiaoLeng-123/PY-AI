@@ -1,0 +1,8 @@
+{
+  "auto_refresh": true,
+  "cache_duration": 3600,
+  "cache_enabled": true,
+  "language": "zh-CN",
+  "refresh_interval": 300,
+  "theme": "light"
+}
