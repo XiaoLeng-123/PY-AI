@@ -54,10 +54,22 @@ export default function StatisticsPage({ selectedStock, stocks }) {
     
     setStatsLoading(true)
     try {
+      console.log('请求统计数据, stock:', currentStock)
       const response = await axios.get(`${API_BASE}/stats/${currentStock}`)
-      setStats(response.data)
+      console.log('API返回数据:', response.data)
+      
+      // 验证返回数据的完整性
+      if (response.data && typeof response.data === 'object') {
+        setStats(response.data)
+        console.log('数据已设置到state')
+      } else {
+        toast.error('数据格式错误')
+        setStats(null)
+      }
     } catch (error) {
       console.error('加载统计数据失败:', error)
+      toast.error('加载统计数据失败')
+      setStats(null)
     } finally {
       setStatsLoading(false)
     }
@@ -219,14 +231,19 @@ export default function StatisticsPage({ selectedStock, stocks }) {
             '--card-gradient': 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
             padding: '24px'
           }}>
-            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '12px' }}>
-              <div>
-                <div style={{ fontSize: '14px', color: 'rgba(255,255,255,0.7)', fontWeight: '500', marginBottom: '4px' }}>价格指标</div>
-                <div style={{ fontSize: '18px', color: '#fff', fontWeight: '700' }}>最新价格</div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.8)', fontWeight: '500', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>价格指标</div>
+                <div style={{ fontSize: '16px', color: '#fff', fontWeight: '600', marginBottom: '12px' }}>最新价格</div>
+                <div style={{ fontSize: '36px', fontWeight: '800', lineHeight: '1', color: '#fff', letterSpacing: '-0.5px' }}>
+                  {stats.latest_price !== undefined && stats.latest_price !== null ? 
+                    `¥${stats.latest_price.toFixed(2)}` : 
+                    '--'
+                  }
+                </div>
               </div>
-              <div style={{ width: '36px', height: '36px', background: 'rgba(255,255,255,0.2)', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px' }}>💰</div>
+              <div style={{ width: '52px', height: '52px', background: 'rgba(255,255,255,0.2)', borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '26px', flexShrink: 0 }}>💰</div>
             </div>
-            <div style={{ fontSize: '32px', fontWeight: '800', lineHeight: '1', color: '#fff' }}>¥{stats.latest_price.toFixed(2)}</div>
           </div>
           
           <div className="stat-card-apple" style={{
@@ -235,15 +252,18 @@ export default function StatisticsPage({ selectedStock, stocks }) {
               : 'linear-gradient(135deg, #f5576c 0%, #ff6b6b 100%)',
             padding: '24px'
           }}>
-            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '12px' }}>
-              <div>
-                <div style={{ fontSize: '14px', color: 'rgba(255,255,255,0.7)', fontWeight: '500', marginBottom: '4px' }}>收益指标</div>
-                <div style={{ fontSize: '18px', color: '#fff', fontWeight: '700' }}>累计收益率</div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.8)', fontWeight: '500', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>收益指标</div>
+                <div style={{ fontSize: '16px', color: '#fff', fontWeight: '600', marginBottom: '12px' }}>累计收益率</div>
+                <div style={{ fontSize: '36px', fontWeight: '800', lineHeight: '1', color: '#fff', letterSpacing: '-0.5px' }}>
+                  {stats.total_return !== undefined && stats.total_return !== null ? 
+                    `${stats.total_return >= 0 ? '+' : ''}${stats.total_return}%` : 
+                    '--'
+                  }
+                </div>
               </div>
-              <div style={{ width: '36px', height: '36px', background: 'rgba(255,255,255,0.2)', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px' }}>📈</div>
-            </div>
-            <div style={{ fontSize: '32px', fontWeight: '800', lineHeight: '1', color: '#fff' }}>
-              {stats.total_return >= 0 ? '+' : ''}{stats.total_return}%
+              <div style={{ width: '52px', height: '52px', background: 'rgba(255,255,255,0.2)', borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '26px', flexShrink: 0 }}>📈</div>
             </div>
           </div>
           
@@ -251,14 +271,19 @@ export default function StatisticsPage({ selectedStock, stocks }) {
             '--card-gradient': 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
             padding: '24px'
           }}>
-            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '12px' }}>
-              <div>
-                <div style={{ fontSize: '14px', color: 'rgba(255,255,255,0.7)', fontWeight: '500', marginBottom: '4px' }}>胜率指标</div>
-                <div style={{ fontSize: '18px', color: '#fff', fontWeight: '700' }}>交易胜率</div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.8)', fontWeight: '500', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>胜率指标</div>
+                <div style={{ fontSize: '16px', color: '#fff', fontWeight: '600', marginBottom: '12px' }}>交易胜率</div>
+                <div style={{ fontSize: '36px', fontWeight: '800', lineHeight: '1', color: '#fff', letterSpacing: '-0.5px' }}>
+                  {stats.win_rate !== undefined && stats.win_rate !== null ? 
+                    `${stats.win_rate}%` : 
+                    '--'
+                  }
+                </div>
               </div>
-              <div style={{ width: '36px', height: '36px', background: 'rgba(255,255,255,0.2)', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px' }}>🎯</div>
+              <div style={{ width: '52px', height: '52px', background: 'rgba(255,255,255,0.2)', borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '26px', flexShrink: 0 }}>🎯</div>
             </div>
-            <div style={{ fontSize: '32px', fontWeight: '800', lineHeight: '1', color: '#fff' }}>{stats.win_rate}%</div>
           </div>
           
           <div className="stat-card-apple" style={{
@@ -267,14 +292,19 @@ export default function StatisticsPage({ selectedStock, stocks }) {
               : 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
             padding: '24px'
           }}>
-            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '12px' }}>
-              <div>
-                <div style={{ fontSize: '14px', color: 'rgba(255,255,255,0.7)', fontWeight: '500', marginBottom: '4px' }}>趋势指标</div>
-                <div style={{ fontSize: '18px', color: '#fff', fontWeight: '700' }}>均线趋势</div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.8)', fontWeight: '500', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>趋势指标</div>
+                <div style={{ fontSize: '16px', color: '#fff', fontWeight: '600', marginBottom: '12px' }}>均线趋势</div>
+                <div style={{ fontSize: '32px', fontWeight: '800', lineHeight: '1', color: '#fff', letterSpacing: '-0.5px' }}>
+                  {stats.trend !== undefined && stats.trend !== null ? 
+                    stats.trend : 
+                    '--'
+                  }
+                </div>
               </div>
-              <div style={{ width: '36px', height: '36px', background: 'rgba(255,255,255,0.2)', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px' }}>📊</div>
+              <div style={{ width: '52px', height: '52px', background: 'rgba(255,255,255,0.2)', borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '26px', flexShrink: 0 }}>📊</div>
             </div>
-            <div style={{ fontSize: '32px', fontWeight: '800', lineHeight: '1', color: '#fff' }}>{stats.trend}</div>
           </div>
         </div>
       )}
@@ -291,15 +321,18 @@ export default function StatisticsPage({ selectedStock, stocks }) {
               : 'linear-gradient(135deg, #f5576c 0%, #ff6b6b 100%)',
             padding: '24px'
           }}>
-            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '12px' }}>
-              <div>
-                <div style={{ fontSize: '14px', color: 'rgba(255,255,255,0.7)', fontWeight: '500', marginBottom: '4px' }}>短期收益</div>
-                <div style={{ fontSize: '18px', color: '#fff', fontWeight: '700' }}>近5日收益</div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.8)', fontWeight: '500', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>短期收益</div>
+                <div style={{ fontSize: '16px', color: '#fff', fontWeight: '600', marginBottom: '12px' }}>近5日收益</div>
+                <div style={{ fontSize: '36px', fontWeight: '800', lineHeight: '1', color: '#fff', letterSpacing: '-0.5px' }}>
+                  {stats.return_5d !== undefined && stats.return_5d !== null ? 
+                    `${stats.return_5d >= 0 ? '+' : ''}${stats.return_5d}%` : 
+                    '--'
+                  }
+                </div>
               </div>
-              <div style={{ width: '36px', height: '36px', background: 'rgba(255,255,255,0.2)', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px' }}>5️⃣</div>
-            </div>
-            <div style={{ fontSize: '32px', fontWeight: '800', lineHeight: '1', color: '#fff' }}>
-              {stats.return_5d >= 0 ? '+' : ''}{stats.return_5d}%
+              <div style={{ width: '52px', height: '52px', background: 'rgba(255,255,255,0.2)', borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '26px', flexShrink: 0 }}>5️⃣</div>
             </div>
           </div>
           
@@ -309,15 +342,18 @@ export default function StatisticsPage({ selectedStock, stocks }) {
               : 'linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%)',
             padding: '24px'
           }}>
-            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '12px' }}>
-              <div>
-                <div style={{ fontSize: '14px', color: 'rgba(255,255,255,0.7)', fontWeight: '500', marginBottom: '4px' }}>短期收益</div>
-                <div style={{ fontSize: '18px', color: '#fff', fontWeight: '700' }}>近10日收益</div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.8)', fontWeight: '500', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>短期收益</div>
+                <div style={{ fontSize: '16px', color: '#fff', fontWeight: '600', marginBottom: '12px' }}>近10日收益</div>
+                <div style={{ fontSize: '36px', fontWeight: '800', lineHeight: '1', color: '#fff', letterSpacing: '-0.5px' }}>
+                  {stats.return_10d !== undefined && stats.return_10d !== null ? 
+                    `${stats.return_10d >= 0 ? '+' : ''}${stats.return_10d}%` : 
+                    '--'
+                  }
+                </div>
               </div>
-              <div style={{ width: '36px', height: '36px', background: 'rgba(255,255,255,0.2)', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px' }}>🔟</div>
-            </div>
-            <div style={{ fontSize: '32px', fontWeight: '800', lineHeight: '1', color: '#fff' }}>
-              {stats.return_10d >= 0 ? '+' : ''}{stats.return_10d}%
+              <div style={{ width: '52px', height: '52px', background: 'rgba(255,255,255,0.2)', borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '26px', flexShrink: 0 }}>🔟</div>
             </div>
           </div>
           
@@ -325,28 +361,38 @@ export default function StatisticsPage({ selectedStock, stocks }) {
             '--card-gradient': 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)',
             padding: '24px'
           }}>
-            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '12px' }}>
-              <div>
-                <div style={{ fontSize: '14px', color: 'rgba(255,255,255,0.7)', fontWeight: '500', marginBottom: '4px' }}>涨跌统计</div>
-                <div style={{ fontSize: '18px', color: '#fff', fontWeight: '700' }}>上涨天数</div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.8)', fontWeight: '500', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>涨跌统计</div>
+                <div style={{ fontSize: '16px', color: '#fff', fontWeight: '600', marginBottom: '12px' }}>上涨天数</div>
+                <div style={{ fontSize: '36px', fontWeight: '800', lineHeight: '1', color: '#fff', letterSpacing: '-0.5px' }}>
+                  {stats.up_days !== undefined && stats.up_days !== null ? 
+                    `${stats.up_days}天` : 
+                    '--'
+                  }
+                </div>
               </div>
-              <div style={{ width: '36px', height: '36px', background: 'rgba(255,255,255,0.2)', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px' }}>📈</div>
+              <div style={{ width: '52px', height: '52px', background: 'rgba(255,255,255,0.2)', borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '26px', flexShrink: 0 }}>📈</div>
             </div>
-            <div style={{ fontSize: '32px', fontWeight: '800', lineHeight: '1', color: '#fff' }}>{stats.up_days}天</div>
           </div>
           
           <div className="stat-card-apple" style={{
             '--card-gradient': 'linear-gradient(135deg, #f5576c 0%, #ff6b6b 100%)',
             padding: '24px'
           }}>
-            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '12px' }}>
-              <div>
-                <div style={{ fontSize: '14px', color: 'rgba(255,255,255,0.7)', fontWeight: '500', marginBottom: '4px' }}>涨跌统计</div>
-                <div style={{ fontSize: '18px', color: '#fff', fontWeight: '700' }}>下跌天数</div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.8)', fontWeight: '500', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>涨跌统计</div>
+                <div style={{ fontSize: '16px', color: '#fff', fontWeight: '600', marginBottom: '12px' }}>下跌天数</div>
+                <div style={{ fontSize: '36px', fontWeight: '800', lineHeight: '1', color: '#fff', letterSpacing: '-0.5px' }}>
+                  {stats.down_days !== undefined && stats.down_days !== null ? 
+                    `${stats.down_days}天` : 
+                    '--'
+                  }
+                </div>
               </div>
-              <div style={{ width: '36px', height: '36px', background: 'rgba(255,255,255,0.2)', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px' }}>📉</div>
+              <div style={{ width: '52px', height: '52px', background: 'rgba(255,255,255,0.2)', borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '26px', flexShrink: 0 }}>📉</div>
             </div>
-            <div style={{ fontSize: '32px', fontWeight: '800', lineHeight: '1', color: '#fff' }}>{stats.down_days}天</div>
           </div>
         </div>
       )}
@@ -368,7 +414,12 @@ export default function StatisticsPage({ selectedStock, stocks }) {
               </div>
               <div style={{ width: '36px', height: '36px', background: 'rgba(255,255,255,0.2)', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px' }}>⚠️</div>
             </div>
-            <div style={{ fontSize: '32px', fontWeight: '800', lineHeight: '1', color: '#fff' }}>{stats.max_drawdown}%</div>
+            <div style={{ fontSize: '32px', fontWeight: '800', lineHeight: '1', color: '#fff' }}>
+              {stats.max_drawdown !== undefined && stats.max_drawdown !== null ? 
+                `${stats.max_drawdown}%` : 
+                '--'
+              }
+            </div>
           </div>
           
           <div className="stat-card-apple" style={{
@@ -382,7 +433,12 @@ export default function StatisticsPage({ selectedStock, stocks }) {
               </div>
               <div style={{ width: '36px', height: '36px', background: 'rgba(255,255,255,0.2)', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px' }}>📊</div>
             </div>
-            <div style={{ fontSize: '32px', fontWeight: '800', lineHeight: '1', color: '#fff' }}>{stats.annualized_volatility}%</div>
+            <div style={{ fontSize: '32px', fontWeight: '800', lineHeight: '1', color: '#fff' }}>
+              {stats.annualized_volatility !== undefined && stats.annualized_volatility !== null ? 
+                `${stats.annualized_volatility}%` : 
+                '--'
+              }
+            </div>
           </div>
           
           <div className="stat-card-apple" style={{
@@ -396,7 +452,12 @@ export default function StatisticsPage({ selectedStock, stocks }) {
               </div>
               <div style={{ width: '36px', height: '36px', background: 'rgba(255,255,255,0.2)', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px' }}>🎯</div>
             </div>
-            <div style={{ fontSize: '32px', fontWeight: '800', lineHeight: '1', color: '#fff' }}>{stats.sharpe_ratio}</div>
+            <div style={{ fontSize: '32px', fontWeight: '800', lineHeight: '1', color: '#fff' }}>
+              {stats.sharpe_ratio !== undefined && stats.sharpe_ratio !== null ? 
+                stats.sharpe_ratio : 
+                '--'
+              }
+            </div>
           </div>
           
           <div className="stat-card-apple" style={{
@@ -410,7 +471,12 @@ export default function StatisticsPage({ selectedStock, stocks }) {
               </div>
               <div style={{ width: '36px', height: '36px', background: 'rgba(255,255,255,0.2)', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px' }}>💡</div>
             </div>
-            <div style={{ fontSize: '32px', fontWeight: '800', lineHeight: '1', color: '#fff' }}>{stats.rsi}</div>
+            <div style={{ fontSize: '32px', fontWeight: '800', lineHeight: '1', color: '#fff' }}>
+              {stats.rsi !== undefined && stats.rsi !== null ? 
+                stats.rsi : 
+                '--'
+              }
+            </div>
           </div>
         </div>
       )}
@@ -432,7 +498,12 @@ export default function StatisticsPage({ selectedStock, stocks }) {
               </div>
               <div style={{ width: '36px', height: '36px', background: 'rgba(255,255,255,0.2)', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px' }}>5️⃣</div>
             </div>
-            <div style={{ fontSize: '32px', fontWeight: '800', lineHeight: '1', color: '#fff' }}>¥{stats.ma5.toFixed(2)}</div>
+            <div style={{ fontSize: '32px', fontWeight: '800', lineHeight: '1', color: '#fff' }}>
+              {stats.ma5 !== undefined && stats.ma5 !== null ? 
+                `¥${stats.ma5.toFixed(2)}` : 
+                '--'
+              }
+            </div>
           </div>
           
           <div className="stat-card-apple" style={{
@@ -446,7 +517,12 @@ export default function StatisticsPage({ selectedStock, stocks }) {
               </div>
               <div style={{ width: '36px', height: '36px', background: 'rgba(255,255,255,0.2)', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px' }}>🔟</div>
             </div>
-            <div style={{ fontSize: '32px', fontWeight: '800', lineHeight: '1', color: '#fff' }}>¥{stats.ma10.toFixed(2)}</div>
+            <div style={{ fontSize: '32px', fontWeight: '800', lineHeight: '1', color: '#fff' }}>
+              {stats.ma10 !== undefined && stats.ma10 !== null ? 
+                `¥${stats.ma10.toFixed(2)}` : 
+                '--'
+              }
+            </div>
           </div>
           
           <div className="stat-card-apple" style={{
@@ -460,7 +536,12 @@ export default function StatisticsPage({ selectedStock, stocks }) {
               </div>
               <div style={{ width: '36px', height: '36px', background: 'rgba(255,255,255,0.2)', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px' }}>2️⃣</div>
             </div>
-            <div style={{ fontSize: '32px', fontWeight: '800', lineHeight: '1', color: '#fff' }}>¥{stats.ma20.toFixed(2)}</div>
+            <div style={{ fontSize: '32px', fontWeight: '800', lineHeight: '1', color: '#fff' }}>
+              {stats.ma20 !== undefined && stats.ma20 !== null ? 
+                `¥${stats.ma20.toFixed(2)}` : 
+                '--'
+              }
+            </div>
           </div>
           
           <div className="stat-card-apple" style={{
@@ -474,7 +555,12 @@ export default function StatisticsPage({ selectedStock, stocks }) {
               </div>
               <div style={{ width: '36px', height: '36px', background: 'rgba(255,255,255,0.2)', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px' }}>📍</div>
             </div>
-            <div style={{ fontSize: '32px', fontWeight: '800', lineHeight: '1', color: '#fff' }}>¥{stats.support.toFixed(2)}</div>
+            <div style={{ fontSize: '32px', fontWeight: '800', lineHeight: '1', color: '#fff' }}>
+              {stats.support !== undefined && stats.support !== null ? 
+                `¥${stats.support.toFixed(2)}` : 
+                '--'
+              }
+            </div>
           </div>
         </div>
       )}
@@ -495,7 +581,12 @@ export default function StatisticsPage({ selectedStock, stocks }) {
               </div>
               <div style={{ width: '36px', height: '36px', background: 'rgba(255,255,255,0.2)', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px' }}>💹</div>
             </div>
-            <div style={{ fontSize: '32px', fontWeight: '800', lineHeight: '1', color: '#fff' }}>{stats.obv > 0 ? '+' : ''}{(stats.obv / 1000000).toFixed(2)}M</div>
+            <div style={{ fontSize: '32px', fontWeight: '800', lineHeight: '1', color: '#fff' }}>
+              {stats.obv !== undefined && stats.obv !== null ? 
+                `${stats.obv > 0 ? '+' : ''}${(stats.obv / 1000000).toFixed(2)}M` : 
+                '--'
+              }
+            </div>
           </div>
           
           <div className="stat-card-apple" style={{
@@ -513,7 +604,12 @@ export default function StatisticsPage({ selectedStock, stocks }) {
               </div>
               <div style={{ width: '36px', height: '36px', background: 'rgba(255,255,255,0.2)', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px' }}>📊</div>
             </div>
-            <div style={{ fontSize: '32px', fontWeight: '800', lineHeight: '1', color: '#fff' }}>{stats.volume_ratio.toFixed(2)}</div>
+            <div style={{ fontSize: '32px', fontWeight: '800', lineHeight: '1', color: '#fff' }}>
+              {stats.volume_ratio !== undefined && stats.volume_ratio !== null ? 
+                stats.volume_ratio.toFixed(2) : 
+                '--'
+              }
+            </div>
           </div>
           
           <div className="stat-card-apple" style={{
@@ -527,7 +623,12 @@ export default function StatisticsPage({ selectedStock, stocks }) {
               </div>
               <div style={{ width: '36px', height: '36px', background: 'rgba(255,255,255,0.2)', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px' }}>💰</div>
             </div>
-            <div style={{ fontSize: '32px', fontWeight: '800', lineHeight: '1', color: '#fff' }}>¥{stats.vwap.toFixed(2)}</div>
+            <div style={{ fontSize: '32px', fontWeight: '800', lineHeight: '1', color: '#fff' }}>
+              {stats.vwap !== undefined && stats.vwap !== null ? 
+                `¥${stats.vwap.toFixed(2)}` : 
+                '--'
+              }
+            </div>
           </div>
           
           <div className="stat-card-apple" style={{
@@ -545,7 +646,12 @@ export default function StatisticsPage({ selectedStock, stocks }) {
               </div>
               <div style={{ width: '36px', height: '36px', background: 'rgba(255,255,255,0.2)', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px' }}>🎯</div>
             </div>
-            <div style={{ fontSize: '32px', fontWeight: '800', lineHeight: '1', color: '#fff' }}>{stats.mfi.toFixed(1)}</div>
+            <div style={{ fontSize: '32px', fontWeight: '800', lineHeight: '1', color: '#fff' }}>
+              {stats.mfi !== undefined && stats.mfi !== null ? 
+                stats.mfi.toFixed(1) : 
+                '--'
+              }
+            </div>
           </div>
           
           <div className="stat-card-apple" style={{
@@ -563,7 +669,12 @@ export default function StatisticsPage({ selectedStock, stocks }) {
               </div>
               <div style={{ width: '36px', height: '36px', background: 'rgba(255,255,255,0.2)', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px' }}>💎</div>
             </div>
-            <div style={{ fontSize: '32px', fontWeight: '800', lineHeight: '1', color: '#fff' }}>{stats.cmf.toFixed(3)}</div>
+            <div style={{ fontSize: '32px', fontWeight: '800', lineHeight: '1', color: '#fff' }}>
+              {stats.cmf !== undefined && stats.cmf !== null ? 
+                stats.cmf.toFixed(3) : 
+                '--'
+              }
+            </div>
           </div>
           
           <div className="stat-card-apple" style={{
@@ -579,7 +690,12 @@ export default function StatisticsPage({ selectedStock, stocks }) {
               </div>
               <div style={{ width: '36px', height: '36px', background: 'rgba(255,255,255,0.2)', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px' }}>⚡</div>
             </div>
-            <div style={{ fontSize: '32px', fontWeight: '800', lineHeight: '1', color: '#fff' }}>{stats.atr.toFixed(2)}</div>
+            <div style={{ fontSize: '32px', fontWeight: '800', lineHeight: '1', color: '#fff' }}>
+              {stats.atr !== undefined && stats.atr !== null ? 
+                stats.atr.toFixed(2) : 
+                '--'
+              }
+            </div>
           </div>
           
           <div className="stat-card-apple" style={{
@@ -593,7 +709,12 @@ export default function StatisticsPage({ selectedStock, stocks }) {
               </div>
               <div style={{ width: '36px', height: '36px', background: 'rgba(255,255,255,0.2)', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px' }}>📈</div>
             </div>
-            <div style={{ fontSize: '32px', fontWeight: '800', lineHeight: '1', color: '#fff' }}>{(stats.avg_volume / 10000).toFixed(0)}万</div>
+            <div style={{ fontSize: '32px', fontWeight: '800', lineHeight: '1', color: '#fff' }}>
+              {stats.avg_volume !== undefined && stats.avg_volume !== null ? 
+                `${(stats.avg_volume / 10000).toFixed(0)}万` : 
+                '--'
+              }
+            </div>
           </div>
         </div>
       )}
