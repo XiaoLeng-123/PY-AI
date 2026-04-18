@@ -27,23 +27,118 @@ export default function LonghubangPage() {
   
   return (
     <div className="page-content">
-      <div className="card">
-        <h3>🏆 龙虎榜</h3>
+      {/* 头部卡片 */}
+      <div className="longhubang-header-card">
+        <div className="header-icon">🏆</div>
+        <div className="header-info">
+          <h3>龙虎榜</h3>
+          <p>查看每日活跃股票及主力资金动向</p>
+        </div>
+      </div>
         
-        <div className="form-item" style={{marginBottom: '20px'}}>
-          <label>选择日期</label>
-          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-          <button onClick={loadData} className="btn-primary" disabled={longhubangLoading} style={{marginLeft: '10px'}}>
-            {longhubangLoading ? '加载中...' : '查询'}
+      {/* 查询控制区 - 药丸形状 */}
+      <div className="card" style={{marginBottom: '24px'}}>
+        <div className="query-control-bar">
+          <div className="control-item">
+            <label className="control-label">选择日期</label>
+            <input 
+              type="date" 
+              value={date} 
+              onChange={(e) => setDate(e.target.value)}
+              className="apple-input date-input"
+            />
+          </div>
+          <button 
+            onClick={loadData} 
+            className="btn-primary pill-btn"
+            disabled={longhubangLoading}
+          >
+            {longhubangLoading ? (
+              <>
+                <span className="btn-spinner"></span>
+                加载中...
+              </>
+            ) : (
+              <>
+                <span className="btn-icon">🔍</span>
+                查询
+              </>
+            )}
           </button>
         </div>
-        
-        {longhubangData && (
-          <div>
-            <pre>{JSON.stringify(longhubangData, null, 2)}</pre>
-          </div>
-        )}
       </div>
+        
+      {/* 数据展示区 */}
+      {longhubangLoading ? (
+        <div className="loading-state">
+          <div className="spinner">⏳</div>
+          <div>正在加载龙虎榜数据...</div>
+        </div>
+      ) : longhubangData ? (
+        <div className="apple-card">
+          {longhubangData.success && longhubangData.data && longhubangData.data.length > 0 ? (
+            <>
+              <div className="card-header">
+                <h3 className="card-title">📊 龙虎榜数据</h3>
+                <div className="info-badge">
+                  {longhubangData.date} · 共 {longhubangData.count} 条记录
+                </div>
+              </div>
+              <div className="table-container">
+                <table className="data-table apple-table">
+                  <thead>
+                    <tr>
+                      <th>排名</th>
+                      <th>股票代码</th>
+                      <th>股票名称</th>
+                      <th>解读</th>
+                      <th>收盘价</th>
+                      <th>涨跌幅</th>
+                      <th>成交金额</th>
+                      <th>净买额</th>
+                      <th>买入额</th>
+                      <th>卖出额</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {longhubangData.data.map((item, index) => (
+                      <tr key={index}>
+                        <td><span className="rank-badge">{index + 1}</span></td>
+                        <td className="code-cell">{item.SECURITY_CODE}</td>
+                        <td className="name-cell">{item.SECURITY_NAME_ABBR}</td>
+                        <td>{item.INTERPRET}</td>
+                        <td className="price-cell">¥{item.CLOSE_PRICE?.toFixed(2)}</td>
+                        <td className={item.CHANGE_RATE >= 0 ? 'change-up' : 'change-down'}>
+                          {item.CHANGE_RATE >= 0 ? '+' : ''}{item.CHANGE_RATE}%
+                        </td>
+                        <td>¥{(item.TURNOVER / 100000000).toFixed(2)}亿</td>
+                        <td className={item.NET_BUY_AMT >= 0 ? 'change-up' : 'change-down'}>
+                          ¥{(item.NET_BUY_AMT / 100000000).toFixed(2)}亿
+                        </td>
+                        <td>¥{(item.BUY_AMT / 100000000).toFixed(2)}亿</td>
+                        <td>¥{(item.SELL_AMT / 100000000).toFixed(2)}亿</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          ) : (
+            <div className="empty-state-large">
+              <div className="empty-icon">📭</div>
+              <h4>暂无龙虎榜数据</h4>
+              <p>{longhubangData.message || '该日期没有龙虎榜记录，请尝试选择其他日期'}</p>
+              <p className="empty-hint">龙虎榜通常在交易日16:00后更新</p>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="empty-state-large">
+          <div className="empty-icon">📊</div>
+          <h4>等待查询</h4>
+          <p>请选择日期并点击查询按钮</p>
+        </div>
+      )}
     </div>
   )
 }

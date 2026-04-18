@@ -27,72 +27,82 @@ const ScreenerPage = ({ toast }) => {
 
   return (
     <div className="page-content">
-      <div className="page-header">
-        <h2>🔍 智能选股器</h2>
+      {/* 头部卡片 */}
+      <div className="screener-header-card">
+        <div className="header-icon">🔍</div>
+        <div className="header-info">
+          <h3>智能选股器</h3>
+          <p>基于多维度条件快速筛选符合要求的股票</p>
+        </div>
       </div>
 
+      {/* 筛选条件区 - 药丸形状 */}
       <div className="card" style={{marginBottom: '24px'}}>
-        <h3>筛选条件</h3>
-        <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '16px'}}>
-          <div>
-            <label style={{display: 'block', marginBottom: '8px', fontSize: '14px'}}>价格范围（元）</label>
-            <div style={{display: 'flex', gap: '8px'}}>
+        <h3 className="section-title">筛选条件</h3>
+        <div className="screener-filters-grid">
+          {/* 价格范围 */}
+          <div className="filter-item">
+            <label className="control-label">价格范围（元）</label>
+            <div className="range-inputs">
               <input
                 type="number"
                 value={filters.min_price}
                 onChange={(e) => setFilters({...filters, min_price: Number(e.target.value)})}
                 placeholder="最低价"
-                style={{flex: 1, padding: '8px', border: '1px solid #d9d9d9', borderRadius: '4px'}}
+                className="apple-input"
               />
-              <span style={{alignSelf: 'center'}}>-</span>
+              <span className="range-separator">-</span>
               <input
                 type="number"
                 value={filters.max_price}
                 onChange={(e) => setFilters({...filters, max_price: Number(e.target.value)})}
                 placeholder="最高价"
-                style={{flex: 1, padding: '8px', border: '1px solid #d9d9d9', borderRadius: '4px'}}
+                className="apple-input"
               />
             </div>
           </div>
 
-          <div>
-            <label style={{display: 'block', marginBottom: '8px', fontSize: '14px'}}>涨跌幅范围（%）</label>
-            <div style={{display: 'flex', gap: '8px'}}>
+          {/* 涨跌幅范围 */}
+          <div className="filter-item">
+            <label className="control-label">涨跌幅范围（%）</label>
+            <div className="range-inputs">
               <input
                 type="number"
                 value={filters.min_change}
                 onChange={(e) => setFilters({...filters, min_change: Number(e.target.value)})}
                 placeholder="最小涨幅"
-                style={{flex: 1, padding: '8px', border: '1px solid #d9d9d9', borderRadius: '4px'}}
+                className="apple-input"
               />
-              <span style={{alignSelf: 'center'}}>-</span>
+              <span className="range-separator">-</span>
               <input
                 type="number"
                 value={filters.max_change}
                 onChange={(e) => setFilters({...filters, max_change: Number(e.target.value)})}
                 placeholder="最大涨幅"
-                style={{flex: 1, padding: '8px', border: '1px solid #d9d9d9', borderRadius: '4px'}}
+                className="apple-input"
               />
             </div>
           </div>
 
-          <div>
-            <label style={{display: 'block', marginBottom: '8px', fontSize: '14px'}}>最小成交量</label>
+          {/* 最小成交量 */}
+          <div className="filter-item">
+            <label className="control-label">最小成交量</label>
             <input
               type="number"
               value={filters.min_volume}
               onChange={(e) => setFilters({...filters, min_volume: Number(e.target.value)})}
               placeholder="例如：1000000"
-              style={{width: '100%', padding: '8px', border: '1px solid #d9d9d9', borderRadius: '4px'}}
+              className="apple-input"
             />
           </div>
 
-          <div>
-            <label style={{display: 'block', marginBottom: '8px', fontSize: '14px'}}>趋势方向</label>
+          {/* 趋势方向 */}
+          <div className="filter-item">
+            <label className="control-label">趋势方向</label>
             <select
               value={filters.trend}
               onChange={(e) => setFilters({...filters, trend: e.target.value})}
-              style={{width: '100%', padding: '8px', border: '1px solid #d9d9d9', borderRadius: '4px'}}
+              className="apple-select"
             >
               <option value="all">全部</option>
               <option value="up">上涨</option>
@@ -103,34 +113,48 @@ const ScreenerPage = ({ toast }) => {
 
         <button 
           onClick={handleScreen}
-          className="btn-primary"
+          className="btn-primary pill-btn"
           disabled={loading}
+          style={{marginTop: '20px'}}
         >
-          {loading ? '筛选中...' : '开始筛选'}
+          {loading ? (
+            <>
+              <span className="btn-spinner"></span>
+              筛选中...
+            </>
+          ) : (
+            <>
+              <span className="btn-icon">⚡</span>
+              开始筛选
+            </>
+          )}
         </button>
       </div>
 
+      {/* 筛选结果 - 大圆角表格 */}
       {results && (
-        <div className="section-card">
-          <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px'}}>
-            <h3>筛选结果（共{results.count}只）</h3>
-            <span style={{fontSize: '13px', color: '#999'}}>
+        <div className="card">
+          <div className="results-header">
+            <h3 className="section-title">筛选结果（共{results.count}只）</h3>
+            <span className="results-summary">
               条件：价格{results.filters.price_range}元，涨跌幅{results.filters.change_range}
             </span>
           </div>
           
           {results.results.length === 0 ? (
             <div className="empty-state">
-              <p>没有找到符合条件的小马</p>
+              <div style={{fontSize: '48px', marginBottom: '16px'}}>🔍</div>
+              <h3>没有找到符合条件的股票</h3>
+              <p>请尝试调整筛选条件</p>
             </div>
           ) : (
-            <div style={{overflowX: 'auto'}}>
+            <div className="screener-table-container">
               <table className="data-table">
                 <thead>
                   <tr>
                     <th>排名</th>
-                    <th>小马代码</th>
-                    <th>小马名称</th>
+                    <th>代码</th>
+                    <th>名称</th>
                     <th>当前价格</th>
                     <th>30日涨跌幅</th>
                     <th>平均成交量</th>
@@ -139,7 +163,9 @@ const ScreenerPage = ({ toast }) => {
                 <tbody>
                   {results.results.map((stock, idx) => (
                     <tr key={stock.stock_id}>
-                      <td>{idx + 1}</td>
+                      <td>
+                        <span className="rank-badge">{idx + 1}</span>
+                      </td>
                       <td><strong>{stock.stock_code}</strong></td>
                       <td>{stock.stock_name}</td>
                       <td>¥{stock.current_price.toFixed(2)}</td>

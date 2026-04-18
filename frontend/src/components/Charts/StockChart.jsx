@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import * as echarts from 'echarts'
 
-const StockChart = ({ stockData, indicators }) => {
+const StockChart = ({ stockData, indicators, period = 'day', onPeriodChange }) => {
   const chartRef = useRef(null)
   const chartInstance = useRef(null)
   
@@ -12,9 +12,6 @@ const StockChart = ({ stockData, indicators }) => {
   const [showEMA, setShowEMA] = useState(false)
   const [showRSI, setShowRSI] = useState(false)
   const [showVOLMA, setShowVOLMA] = useState(true) // 默认显示成交量均线
-  
-  // K线周期状态
-  const [period, setPeriod] = useState('day') // day/week/month
 
   useEffect(() => {
     if (!stockData || !stockData.dates || stockData.dates.length === 0) {
@@ -507,7 +504,7 @@ const StockChart = ({ stockData, indicators }) => {
         {/* K线周期切换 */}
         <div style={{ display: 'flex', gap: '4px', marginRight: '12px' }}>
           <button
-            onClick={() => setPeriod('day')}
+            onClick={() => onPeriodChange && onPeriodChange('day')}
             style={{
               padding: '6px 12px',
               border: period === 'day' ? '1px solid #1890ff' : '1px solid #d9d9d9',
@@ -522,7 +519,7 @@ const StockChart = ({ stockData, indicators }) => {
             日K
           </button>
           <button
-            onClick={() => setPeriod('week')}
+            onClick={() => onPeriodChange && onPeriodChange('week')}
             style={{
               padding: '6px 12px',
               border: period === 'week' ? '1px solid #1890ff' : '1px solid #d9d9d9',
@@ -537,7 +534,7 @@ const StockChart = ({ stockData, indicators }) => {
             周K
           </button>
           <button
-            onClick={() => setPeriod('month')}
+            onClick={() => onPeriodChange && onPeriodChange('month')}
             style={{
               padding: '6px 12px',
               border: period === 'month' ? '1px solid #1890ff' : '1px solid #d9d9d9',

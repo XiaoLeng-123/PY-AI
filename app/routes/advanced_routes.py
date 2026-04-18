@@ -202,61 +202,230 @@ def check_alerts():
 
 @advanced_bp.route('/sectors/overview', methods=['GET'])
 def get_sectors_overview():
-    """获取板块概况"""
-    # 按市场分类统计
-    markets = db.session.query(Stock.market, db.func.count(Stock.id)).all()
-    
-    result = {
-        'markets': [{'name': m[0], 'count': m[1]} for m in markets],
-        'total_stocks': Stock.query.count(),
-        'total_records': StockPrice.query.count()
-    }
-    
-    return jsonify(result)
+    """获取板块概况 - 使用AkShare新浪行业板块接口（稳定可靠）"""
+    try:
+        import akshare as ak
+        
+        print("\n[板块概况] 开始获取新浪行业板块数据...")
+        
+        # 获取新浪行业板块实时行情
+        df = ak.stock_sector_spot(indicator='新浪行业')
+        
+        if df is None or len(df) == 0:
+            return jsonify({
+                'success': False,
+                'error': '未获取到板块数据',
+                'message': '新浪行业板块数据为空，请稍后重试',
+                'sectors': [],
+                'statistics': {}
+            }), 503
+        
+        # 转换为列表格式
+        sectors = []
+        for _, row in df.iterrows():
+            sectors.append({
+                'code': str(row.get('label', '')),  # 板块代码
+                'name': str(row.get('板块', '')),  # 板块名称
+                'change_pct': round(float(row.get('涨跌幅', 0)), 2),  # 涨跌幅
+                'change_amount': round(float(row.get('涨跌额', 0)), 2),  # 涨跌额
+                'average_price': round(float(row.get('平均价格', 0)), 2),  # 平均价格
+                'volume': round(float(row.get('总成交量', 0)) / 10000, 2),  # 成交量(万手)
+                'amount': round(float(row.get('总成交额', 0)) / 100000000, 2),  # 成交额(亿)
+                'stock_count': int(row.get('公司家数', 0)),  # 成分股数量
+                'leading_stock_code': str(row.get('股票代码', '')),  # 领涨股票代码
+                'leading_stock_change': round(float(row.get('个股-涨跌幅', 0)), 2),  # 领涨股涨跌幅
+                'leading_stock_price': round(float(row.get('个股-当前价', 0)), 2),  # 领涨股当前价
+                'leading_stock_name': str(row.get('股票名称', '')),  # 领涨股名称
+            })
+        
+        # 统计信息
+        total_sectors = len(sectors)
+        rising_sectors = sum(1 for s in sectors if s['change_pct'] > 0)
+        falling_sectors = sum(1 for s in sectors if s['change_pct'] < 0)
+        avg_change = round(sum(s['change_pct'] for s in sectors) / total_sectors, 2) if total_sectors > 0 else 0
+        
+        print(f"[板块概况] ✅ 成功获取 {total_sectors} 个新浪行业板块数据")
+        return jsonify({
+            'success': True,
+            'sectors': sectors,
+            'statistics': {
+                'total_sectors': total_sectors,
+                'rising_sectors': rising_sectors,
+                'falling_sectors': falling_sectors,
+                'avg_change_pct': avg_change,
+                'update_time': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            }
+        })
+        
+    except Exception as e:
+        print(f"[板块概况] ❌ 获取数据失败: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'message': '无法获取新浪行业板块数据，请稍后重试',
+            'sectors': [],
+            'statistics': {}
+        }), 500
 
 @advanced_bp.route('/sectors/rankings', methods=['GET'])
 def get_sector_rankings():
-    """获取板块涨跌幅排行"""
-    date = request.args.get('date')
-    if not date:
-        # 获取最新交易日
-        latest = StockPrice.query.order_by(StockPrice.date.desc()).first()
-        date = latest.date if latest else None
-    
-    if not date:
-        return jsonify([])
-    
-    # 获取当日所有股票
-    prices = StockPrice.query.filter_by(date=date).all()
-    
-    # 计算涨跌幅
-    stocks_with_change = []
-    for price in prices:
-        prev = StockPrice.query.filter(
-            StockPrice.stock_id == price.stock_id,
-            StockPrice.date < date
-        ).order_by(StockPrice.date.desc()).first()
+    """获取板块涨跌幅排行 - 使用AkShare新浪行业板块接口（稳定可靠）"""
+    try:
+        import akshare as ak
         
-        if prev:
-            change_pct = ((price.close_price - prev.close_price) / prev.close_price) * 100
-            stocks_with_change.append({
-                'stock_id': price.stock_id,
-                'code': price.stock.code,
-                'name': price.stock.name,
-                'market': price.stock.market,
-                'close_price': price.close_price,
-                'change_pct': round(change_pct, 2)
+        print("\n[板块排行] 开始获取新浪行业板块数据...")
+        
+        # 获取新浪行业板块实时行情
+        df = ak.stock_sector_spot(indicator='新浪行业')
+        
+        if df is None or len(df) == 0:
+            return jsonify({
+                'success': False,
+                'error': '未获取到板块数据',
+                'message': '新浪行业板块数据为空，请稍后重试',
+                'gainers': [],
+                'losers': [],
+                'all_sectors': []
+            }), 503
+        
+        # 转换为列表格式并按涨跌幅排序
+        all_sectors = []
+        for _, row in df.iterrows():
+            all_sectors.append({
+                'rank': len(all_sectors) + 1,
+                'code': str(row.get('label', '')),
+                'name': str(row.get('板块', '')),
+                'change_pct': round(float(row.get('涨跌幅', 0)), 2),
+                'change_amount': round(float(row.get('涨跌额', 0)), 2),
+                'average_price': round(float(row.get('平均价格', 0)), 2),
+                'volume': round(float(row.get('总成交量', 0)) / 10000, 2),
+                'amount': round(float(row.get('总成交额', 0)) / 100000000, 2),
+                'stock_count': int(row.get('公司家数', 0)),
+                'leading_stock_code': str(row.get('股票代码', '')),
+                'leading_stock_change': round(float(row.get('个股-涨跌幅', 0)), 2),
+                'leading_stock_price': round(float(row.get('个股-当前价', 0)), 2),
+                'leading_stock_name': str(row.get('股票名称', '')),
             })
+        
+        # 按涨跌幅降序排列
+        all_sectors.sort(key=lambda x: x['change_pct'], reverse=True)
+        
+        # 更新排名
+        for i, sector in enumerate(all_sectors):
+            sector['rank'] = i + 1
+        
+        # 涨幅前20名
+        gainers = all_sectors[:20]
+        # 跌幅前20名（倒序）
+        losers = all_sectors[-20:][::-1]
+        
+        print(f"[板块排行] ✅ 成功获取 {len(all_sectors)} 个新浪行业板块数据")
+        return jsonify({
+            'success': True,
+            'date': datetime.now().strftime('%Y-%m-%d'),
+            'gainers': gainers,
+            'losers': losers,
+            'all_sectors': all_sectors
+        })
+        
+    except Exception as e:
+        print(f"[板块排行] ❌ 获取数据失败: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'message': '无法获取新浪行业板块排行数据，请稍后重试',
+            'gainers': [],
+            'losers': [],
+            'all_sectors': []
+        }), 500
+
+@advanced_bp.route('/sectors/<sector_code>/stocks', methods=['GET'])
+def get_sector_stocks(sector_code):
+    """获取板块成分股列表"""
+    import requests
     
-    # 排序
-    gainers = sorted(stocks_with_change, key=lambda x: x['change_pct'], reverse=True)[:20]
-    losers = sorted(stocks_with_change, key=lambda x: x['change_pct'])[:20]
+    # 安全转换函数
+    def safe_float(value, default=0):
+        try:
+            if value is None or value == '-' or value == '':
+                return default
+            return float(value)
+        except (ValueError, TypeError):
+            return default
     
-    return jsonify({
-        'date': date.isoformat(),
-        'gainers': gainers,
-        'losers': losers
-    })
+    def safe_int(value, default=0):
+        try:
+            if value is None or value == '-' or value == '':
+                return default
+            return int(value)
+        except (ValueError, TypeError):
+            return default
+    
+    try:
+        # 从东方财富获取板块成分股
+        url = "http://push2.eastmoney.com/api/qt/clist/get"
+        params = {
+            'pn': 1,
+            'pz': 100,
+            'po': 1,
+            'np': 1,
+            'ut': 'bd1d9ddb04089700cf9c27f6f7426281',
+            'fltt': 2,
+            'invt': 2,
+            'fid': 'f3',
+            'fs': f'b:{sector_code} f:!50',  # 板块成分股
+            'fields': 'f1,f2,f3,f4,f5,f6,f7,f8,f9,f10,f12,f13,f14,f15,f16,f17,f18,f20,f21,f23,f24,f25,f26'
+        }
+        
+        response = requests.get(url, params=params, timeout=5)
+        response.raise_for_status()
+        data = response.json()
+        
+        if data.get('data') and data['data'].get('diff'):
+            stocks = []
+            for item in data['data']['diff']:
+                stocks.append({
+                    'code': str(item.get('f12', '')),
+                    'name': str(item.get('f14', '')),
+                    'close_price': round(safe_float(item.get('f2')), 2),
+                    'change_pct': round(safe_float(item.get('f3')), 2),
+                    'change_amount': round(safe_float(item.get('f4')), 2),
+                    'volume': round(safe_float(item.get('f5')) / 100, 2),
+                    'amount': round(safe_float(item.get('f6')) / 10000, 2),
+                    'turnover_rate': round(safe_float(item.get('f8')), 2),
+                    'pe_ratio': round(safe_float(item.get('f9')), 2),
+                    'market_cap': round(safe_float(item.get('f20')) / 100000000, 2),
+                })
+            
+            return jsonify({
+                'success': True,
+                'sector_code': sector_code,
+                'stocks': stocks,
+                'total': len(stocks)
+            })
+        else:
+            raise Exception("API返回数据为空")
+            
+    except requests.exceptions.RequestException as e:
+        print(f"网络请求失败: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': '网络连接失败',
+            'message': '无法连接东方财富API，请检查网络连接',
+            'stocks': []
+        }), 500
+    except Exception as e:
+        print(f"获取板块成分股失败: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'message': '无法获取板块成分股数据，请稍后重试',
+            'stocks': []
+        }), 500
 
 # ==================== 资金流向分析 ====================
 
@@ -766,3 +935,121 @@ def optimize_strategy():
         'best_params': results[0] if results else None,
         'all_results': results[:20]  # 返回前20个结果
     })
+
+# ==================== 智能选股器 ====================
+
+@advanced_bp.route('/screener', methods=['POST'])
+def screen_stocks():
+    """智能选股 - 根据条件筛选股票"""
+    data = request.json
+    
+    # 获取筛选条件
+    min_price = data.get('min_price', 0)
+    max_price = data.get('max_price', 1000)
+    min_change = data.get('min_change', -100)
+    max_change = data.get('max_change', 100)
+    min_volume = data.get('min_volume', 0)
+    trend = data.get('trend', 'all')  # 'all', 'up', 'down'
+    
+    try:
+        # 获取所有股票的最新价格数据
+        latest_prices = db.session.query(
+            StockPrice.stock_id,
+            StockPrice.close_price,
+            StockPrice.volume,
+            StockPrice.date
+        ).filter(
+            StockPrice.date == db.session.query(db.func.max(StockPrice.date)).scalar_subquery()
+        ).all()
+        
+        if not latest_prices:
+            return jsonify({
+                'success': False,
+                'error': '没有可用的价格数据',
+                'results': [],
+                'count': 0
+            })
+        
+        # 筛选符合条件的股票
+        filtered_stocks = []
+        for price_record in latest_prices:
+            stock = Stock.query.get(price_record.stock_id)
+            if not stock:
+                continue
+            
+            current_price = price_record.close_price
+            volume = price_record.volume or 0
+            
+            # 价格筛选
+            if current_price < min_price or current_price > max_price:
+                continue
+            
+            # 成交量筛选
+            if volume < min_volume:
+                continue
+            
+            # 计算30日涨跌幅
+            thirty_days_ago = price_record.date - timedelta(days=30)
+            old_price = StockPrice.query.filter(
+                StockPrice.stock_id == stock.id,
+                StockPrice.date <= thirty_days_ago
+            ).order_by(StockPrice.date.desc()).first()
+            
+            change_30d = 0
+            if old_price and old_price.close_price > 0:
+                change_30d = ((current_price - old_price.close_price) / old_price.close_price) * 100
+            
+            # 涨跌幅筛选
+            if change_30d < min_change or change_30d > max_change:
+                continue
+            
+            # 趋势方向筛选
+            if trend == 'up' and change_30d <= 0:
+                continue
+            if trend == 'down' and change_30d >= 0:
+                continue
+            
+            # 计算平均成交量（最近30天）
+            recent_prices = StockPrice.query.filter(
+                StockPrice.stock_id == stock.id,
+                StockPrice.date >= thirty_days_ago
+            ).all()
+            
+            avg_volume = 0
+            if recent_prices:
+                volumes = [p.volume for p in recent_prices if p.volume]
+                avg_volume = sum(volumes) / len(volumes) if volumes else 0
+            
+            filtered_stocks.append({
+                'stock_id': stock.id,
+                'stock_code': stock.code,
+                'stock_name': stock.name,
+                'current_price': current_price,
+                'change_30d': round(change_30d, 2),
+                'avg_volume': round(avg_volume, 0),
+                'volume': volume
+            })
+        
+        # 按30日涨跌幅排序
+        filtered_stocks.sort(key=lambda x: x['change_30d'], reverse=True)
+        
+        return jsonify({
+            'success': True,
+            'results': filtered_stocks,
+            'count': len(filtered_stocks),
+            'filters': {
+                'price_range': f'{min_price}-{max_price}',
+                'change_range': f'{min_change}%-{max_change}%',
+                'min_volume': min_volume,
+                'trend': trend
+            }
+        })
+        
+    except Exception as e:
+        print(f"智能选股失败: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'results': [],
+            'count': 0
+        }), 500

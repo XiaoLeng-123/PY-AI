@@ -44,10 +44,11 @@ const breadcrumbMap = {
 export default function AppLayout({ currentMenu, setCurrentMenu, collapsed, setCollapsed, children }) {
   return (
     <div className="layout">
-      {/* 侧边栏 */}
+      {/* 侧边栏 - 苹果风格 */}
       <aside className={`sidebar ${collapsed ? 'collapsed' : ''}`}>
         <div className="logo">
-          {!collapsed && <span className="logo-text">🐴 小马分析</span>}
+          <span className="logo-icon">🐴</span>
+          {!collapsed && <span className="logo-text">小马分析</span>}
         </div>
         
         <nav className="menu">
@@ -66,8 +67,9 @@ export default function AppLayout({ currentMenu, setCurrentMenu, collapsed, setC
         {/* 底部收缩按钮 */}
         <div className="sidebar-footer">
           <button 
-            className="collapse-btn"
+            className="collapse-btn pill-btn-sm"
             onClick={() => setCollapsed(!collapsed)}
+            title={collapsed ? '展开菜单' : '折叠菜单'}
           >
             {collapsed ? '▶' : '◀'}
           </button>
@@ -76,13 +78,13 @@ export default function AppLayout({ currentMenu, setCurrentMenu, collapsed, setC
 
       {/* 主内容区 */}
       <div className="main">
-        {/* 面包屑导航 */}
-        <div className="header">
+        {/* 面包屑导航 - 苹果风格 */}
+        <div className="header apple-header">
           <div className="breadcrumb">
             {breadcrumbMap[currentMenu]?.map((item, index) => (
-              <span key={index}>
-                {index > 0 && <span className="separator">/</span>}
-                <span className={index === breadcrumbMap[currentMenu].length - 1 ? 'breadcrumb-item' : ''}>
+              <span key={index} className="breadcrumb-item-wrapper">
+                {index > 0 && <span className="separator">›</span>}
+                <span className={`breadcrumb-item ${index === breadcrumbMap[currentMenu].length - 1 ? 'current' : ''}`}>
                   {item}
                 </span>
               </span>

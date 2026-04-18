@@ -76,9 +76,14 @@ const PortfolioPage = ({ stocks, toast }) => {
 
   return (
     <div className="page-content">
-      <div className="page-header">
-        <h2>💼 持仓管理</h2>
-        <button onClick={() => setShowModal(true)} className="btn-primary">
+      {/* 头部卡片 */}
+      <div className="portfolio-header-card">
+        <div className="header-icon">💼</div>
+        <div className="header-info">
+          <h3>持仓管理</h3>
+          <p>实时追踪您的模拟投资组合表现与盈亏情况</p>
+        </div>
+        <button onClick={() => setShowModal(true)} className="btn-primary pill-btn">
           + 添加持仓
         </button>
       </div>
@@ -96,34 +101,34 @@ const PortfolioPage = ({ stocks, toast }) => {
         </div>
       ) : (
         <div>
-          {/* 统计卡片 */}
-          <div className="metrics-grid" style={{marginBottom: '24px'}}>
-            <div className="metric-card">
+          {/* 统计卡片网格 - 药丸形状 */}
+          <div className="portfolio-metrics-grid" style={{marginBottom: '24px'}}>
+            <div className="metric-card-pill">
               <div className="metric-header">
                 <span className="metric-icon">💰</span>
                 <span className="metric-title">总市值</span>
               </div>
-              <div className="metric-value" style={{fontSize: '24px'}}>
+              <div className="metric-value">
                 ¥{portfolioData.summary.total_market_value.toLocaleString()}
               </div>
             </div>
             
-            <div className="metric-card">
+            <div className="metric-card-pill">
               <div className="metric-header">
                 <span className="metric-icon">📊</span>
                 <span className="metric-title">总成本</span>
               </div>
-              <div className="metric-value" style={{fontSize: '24px'}}>
+              <div className="metric-value">
                 ¥{portfolioData.summary.total_cost.toLocaleString()}
               </div>
             </div>
             
-            <div className="metric-card">
+            <div className="metric-card-pill highlight">
               <div className="metric-header">
                 <span className="metric-icon">📈</span>
                 <span className="metric-title">总收益</span>
               </div>
-              <div className={`metric-value ${portfolioData.summary.total_profit >= 0 ? 'positive' : 'negative'}`} style={{fontSize: '24px'}}>
+              <div className={`metric-value ${portfolioData.summary.total_profit >= 0 ? 'positive' : 'negative'}`}>
                 {portfolioData.summary.total_profit >= 0 ? '+' : ''}¥{portfolioData.summary.total_profit.toLocaleString()}
               </div>
               <div className={`metric-change ${portfolioData.summary.total_profit_rate >= 0 ? 'positive' : 'negative'}`}>
@@ -131,12 +136,12 @@ const PortfolioPage = ({ stocks, toast }) => {
               </div>
             </div>
             
-            <div className="metric-card">
+            <div className="metric-card-pill">
               <div className="metric-header">
                 <span className="metric-icon">🎯</span>
                 <span className="metric-title">持仓数量</span>
               </div>
-              <div className="metric-value" style={{fontSize: '24px'}}>
+              <div className="metric-value">
                 {portfolioData.summary.total_positions} 只
               </div>
               <div className="metric-detail">
@@ -145,15 +150,15 @@ const PortfolioPage = ({ stocks, toast }) => {
             </div>
           </div>
 
-          {/* 持仓列表 */}
-          <div className="section-card">
-            <h3>持仓明细</h3>
-            <div style={{overflowX: 'auto'}}>
+          {/* 持仓列表 - 大圆角 */}
+          <div className="card">
+            <h3 className="section-title">持仓明细</h3>
+            <div className="portfolio-table-container">
               <table className="data-table">
                 <thead>
                   <tr>
-                    <th>小马代码</th>
-                    <th>小马名称</th>
+                    <th>代码</th>
+                    <th>名称</th>
                     <th>持仓数量</th>
                     <th>成本价</th>
                     <th>现价</th>
@@ -183,15 +188,7 @@ const PortfolioPage = ({ stocks, toast }) => {
                       <td>
                         <button 
                           onClick={() => handleDelete(pos.id)}
-                          style={{
-                            background: '#ff4d4f',
-                            color: '#fff',
-                            border: 'none',
-                            padding: '4px 12px',
-                            borderRadius: '4px',
-                            cursor: 'pointer',
-                            fontSize: '12px'
-                          }}
+                          className="btn-danger pill-btn-sm"
                         >
                           删除
                         </button>
@@ -201,6 +198,115 @@ const PortfolioPage = ({ stocks, toast }) => {
                 </tbody>
               </table>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* 添加持仓弹窗 - 苹果风格 */}
+      {showModal && (
+        <div className="apple-modal-overlay" onClick={() => setShowModal(false)}>
+          <div className="apple-modal" onClick={(e) => e.stopPropagation()}>
+            {/* 头部 */}
+            <div className="apple-modal-header">
+              <div className="apple-modal-title">
+                <div className="apple-modal-icon">💼</div>
+                <div>
+                  <h3>添加持仓</h3>
+                  <p>录入新的股票持仓信息</p>
+                </div>
+              </div>
+              <button className="apple-modal-close" onClick={() => setShowModal(false)}>✕</button>
+            </div>
+            
+            <form onSubmit={handleAdd}>
+              {/* 股票选择 */}
+              <div className="apple-form-group">
+                <label className="apple-label">
+                  <span className="label-icon">📊</span>
+                  选择股票
+                </label>
+                <select 
+                  value={form.stock_id} 
+                  onChange={(e) => setForm({...form, stock_id: e.target.value})} 
+                  className="apple-select"
+                  required
+                >
+                  <option value="">请选择股票</option>
+                  {stocks.map(s => <option key={s.id} value={s.id}>{s.code} - {s.name}</option>)}
+                </select>
+              </div>
+              
+              {/* 持仓数量 */}
+              <div className="apple-form-group">
+                <label className="apple-label">
+                  <span className="label-icon">🔢</span>
+                  持仓数量
+                </label>
+                <input 
+                  type="number" 
+                  value={form.quantity} 
+                  onChange={(e) => setForm({...form, quantity: e.target.value})}
+                  placeholder="输入持股数量"
+                  className="apple-input"
+                  required
+                  min="1"
+                />
+              </div>
+              
+              {/* 成本价 */}
+              <div className="apple-form-group">
+                <label className="apple-label">
+                  <span className="label-icon">💰</span>
+                  成本价
+                </label>
+                <input 
+                  type="number" 
+                  step="0.01"
+                  value={form.avg_cost} 
+                  onChange={(e) => setForm({...form, avg_cost: e.target.value})}
+                  placeholder="输入每股成本价"
+                  className="apple-input"
+                  required
+                  min="0.01"
+                />
+              </div>
+              
+              {/* 买入日期 */}
+              <div className="apple-form-group">
+                <label className="apple-label">
+                  <span className="label-icon">📅</span>
+                  买入日期
+                </label>
+                <input 
+                  type="date" 
+                  value={form.buy_date} 
+                  onChange={(e) => setForm({...form, buy_date: e.target.value})}
+                  className="apple-input date-input"
+                  required
+                />
+              </div>
+              
+              {/* 备注 */}
+              <div className="apple-form-group">
+                <label className="apple-label">
+                  <span className="label-icon">📝</span>
+                  备注（可选）
+                </label>
+                <textarea 
+                  value={form.notes} 
+                  onChange={(e) => setForm({...form, notes: e.target.value})}
+                  placeholder="添加备注信息..."
+                  className="apple-input apple-textarea"
+                  rows="3"
+                />
+              </div>
+              
+              {/* 按钮组 */}
+              <div className="apple-modal-footer">
+                <button type="button" className="btn-secondary pill-btn" onClick={() => setShowModal(false)}>取消</button>
+                <button type="submit" className="btn-primary pill-btn">确认添加</button>
+              </div>
+            </form>
           </div>
         </div>
       )}

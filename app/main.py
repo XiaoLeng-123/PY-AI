@@ -39,8 +39,8 @@ def create_app():
     # 注册基础路由
     register_routes(app)
     
-    # WebSocket事件
-    register_websocket_events(socketio)
+    # WebSocket事件（需要传入app实例）
+    register_websocket_events(socketio, app)
     
     return app, socketio
 
@@ -52,12 +52,14 @@ def register_blueprints(app):
     from app.routes.ai_routes import ai_bp
     from app.routes.advanced_routes import advanced_bp
     from app.routes.stats_routes import stats_bp
+    from app.routes.market_routes import market_bp
     
     app.register_blueprint(stock_bp)
     app.register_blueprint(price_bp)
     app.register_blueprint(ai_bp)
     app.register_blueprint(advanced_bp)
     app.register_blueprint(stats_bp)
+    app.register_blueprint(market_bp)
 
 
 def register_routes(app):
@@ -80,7 +82,7 @@ def register_routes(app):
             return send_from_directory(STATIC_PATH, 'index.html')
 
 
-def register_websocket_events(socketio):
+def register_websocket_events(socketio, app):
     """注册WebSocket事件"""
     from flask_socketio import emit
     from flask import request
@@ -119,32 +121,34 @@ def register_websocket_events(socketio):
     
     def push_realtime_prices():
         """后台线程：定期推送实时行情"""
-        while True:
-            try:
-                for stock_id, sids in list(subscriptions.items()):
-                    if not sids:
-                        continue
+        # 创建应用上下文
+        with app.app_context():
+            while True:
+                try:
+                    for stock_id, sids in list(subscriptions.items()):
+                        if not sids:
+                            continue
+                        
+                        # 获取股票信息
+                        stock = Stock.query.get(stock_id)
+                        if not stock:
+                            continue
+                        
+                        # 获取实时行情
+                        realtime_data = get_realtime_price(stock.code)
+                        if realtime_data:
+                            # 推送到所有订阅者
+                            for sid in sids:
+                                socketio.emit('price_update', {
+                                    'stock_id': stock_id,
+                                    'data': realtime_data
+                                }, room=sid)
                     
-                    # 获取股票信息
-                    stock = Stock.query.get(stock_id)
-                    if not stock:
-                        continue
-                    
-                    # 获取实时行情
-                    realtime_data = get_realtime_price(stock.code)
-                    if realtime_data:
-                        # 推送到所有订阅者
-                        for sid in sids:
-                            socketio.emit('price_update', {
-                                'stock_id': stock_id,
-                                'data': realtime_data
-                            }, room=sid)
-                
-                # 每5秒推送一次
-                time.sleep(5)
-            except Exception as e:
-                print(f'推送实时行情失败: {e}')
-                time.sleep(5)
+                    # 每5秒推送一次
+                    time.sleep(5)
+                except Exception as e:
+                    print(f'推送实时行情失败: {e}')
+                    time.sleep(5)
     
     # 启动后台推送线程
     push_thread = threading.Thread(target=push_realtime_prices, daemon=True)

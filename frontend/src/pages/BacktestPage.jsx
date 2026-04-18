@@ -7,14 +7,14 @@ const API_BASE = 'http://127.0.0.1:5000/api'
 
 export default function BacktestPage({ stocks }) {
   const [selectedStock, setSelectedStock] = useState('')
-  const [strategy, setStrategy] = useState('ma_cross') // 策略类型
+  const [strategy, setStrategy] = useState('ma_cross')
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0])
   const [backtestResult, setBacktestResult] = useState(null)
   const [loading, setLoading] = useState(false)
   const [showOptimize, setShowOptimize] = useState(false)
   const [optimizeResult, setOptimizeResult] = useState(null)
-  const chartInstance = useRef(null) // 保存图表实例
+  const chartInstance = useRef(null)
 
   const runBacktest = async () => {
     if (!selectedStock) {
@@ -33,7 +33,6 @@ export default function BacktestPage({ stocks }) {
       setBacktestResult(response.data)
       toast.success('回测完成')
       
-      // 延迟渲染图表，确保DOM已更新
       setTimeout(() => renderEquityChart(response.data.equity_curve), 100)
     } catch (error) {
       toast.error(error.response?.data?.error || '回测失败')
@@ -73,17 +72,16 @@ export default function BacktestPage({ stocks }) {
     const chartDom = document.getElementById('equity-chart')
     if (!chartDom) return
     
-    // 销毁旧实例
     if (chartInstance.current) {
       chartInstance.current.dispose()
     }
     
     const myChart = echarts.init(chartDom)
-    chartInstance.current = myChart // 保存实例
+    chartInstance.current = myChart
     
     const dates = equityCurve.map(item => item.date)
     const equities = equityCurve.map(item => item.equity)
-    const drawdowns = equityCurve.map(item => -item.drawdown) // 负值显示在下方
+    const drawdowns = equityCurve.map(item => -item.drawdown)
     
     const option = {
       title: {
@@ -100,8 +98,8 @@ export default function BacktestPage({ stocks }) {
         top: 30
       },
       grid: [
-        { left: '10%', right: '8%', height: '50%', top: '15%' },
-        { left: '10%', right: '8%', top: '70%', height: '20%' }
+        { left: '10%', right: '8%', height: '45%', top: '12%' },
+        { left: '10%', right: '8%', top: '65%', height: '25%' }
       ],
       xAxis: [
         {
@@ -167,17 +165,14 @@ export default function BacktestPage({ stocks }) {
     
     myChart.setOption(option)
     
-    // 添加resize监听
     const handleResize = () => myChart.resize()
     window.addEventListener('resize', handleResize)
     
-    // 返回清理函数
     return () => {
       window.removeEventListener('resize', handleResize)
     }
   }
 
-  // 组件卸载时清理图表
   useEffect(() => {
     return () => {
       if (chartInstance.current) {
@@ -189,34 +184,39 @@ export default function BacktestPage({ stocks }) {
 
   return (
     <div className="page-content">
-      <div className="page-header">
-        <h2>📊 策略回测</h2>
+      {/* 头部卡片 */}
+      <div className="backtest-header-card">
+        <div className="header-icon">📊</div>
+        <div className="header-info">
+          <h3>策略回测</h3>
+          <p>基于历史数据验证交易策略的有效性与收益表现</p>
+        </div>
       </div>
 
-      {/* 参数设置 */}
+      {/* 参数设置区 - 药丸形状 */}
       <div className="card" style={{ marginBottom: '24px' }}>
-        <h3>⚙️ 回测参数</h3>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginTop: '16px' }}>
-          <div>
-            <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', color: '#333' }}>选择股票</label>
+        <h3 className="section-title">⚙️ 回测参数</h3>
+        <div className="backtest-params-grid">
+          <div className="param-item">
+            <label className="control-label">选择股票</label>
             <select 
               value={selectedStock} 
               onChange={(e) => setSelectedStock(e.target.value)}
-              style={{ width: '100%', padding: '8px 12px', border: '1px solid #d9d9d9', borderRadius: '4px' }}
+              className="apple-select"
             >
-              <option value="">请选择</option>
+              <option value="">请选择股票</option>
               {stocks.map(s => (
                 <option key={s.id} value={s.id}>{s.code} - {s.name}</option>
               ))}
             </select>
           </div>
 
-          <div>
-            <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', color: '#333' }}>策略类型</label>
+          <div className="param-item">
+            <label className="control-label">策略类型</label>
             <select 
               value={strategy} 
               onChange={(e) => setStrategy(e.target.value)}
-              style={{ width: '100%', padding: '8px 12px', border: '1px solid #d9d9d9', borderRadius: '4px' }}
+              className="apple-select"
             >
               <option value="ma_cross">均线金叉/死叉</option>
               <option value="macd">MACD金叉/死叉</option>
@@ -225,43 +225,51 @@ export default function BacktestPage({ stocks }) {
             </select>
           </div>
 
-          <div>
-            <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', color: '#333' }}>开始日期</label>
+          <div className="param-item">
+            <label className="control-label">开始日期</label>
             <input 
               type="date" 
               value={startDate} 
               onChange={(e) => setStartDate(e.target.value)}
-              style={{ width: '100%', padding: '8px 12px', border: '1px solid #d9d9d9', borderRadius: '4px' }}
+              className="apple-input date-input"
             />
           </div>
 
-          <div>
-            <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', color: '#333' }}>结束日期</label>
+          <div className="param-item">
+            <label className="control-label">结束日期</label>
             <input 
               type="date" 
               value={endDate} 
               onChange={(e) => setEndDate(e.target.value)}
-              style={{ width: '100%', padding: '8px 12px', border: '1px solid #d9d9d9', borderRadius: '4px' }}
+              className="apple-input date-input"
             />
           </div>
         </div>
 
-        <div style={{ marginTop: '16px', textAlign: 'right', display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+        <div className="backtest-actions">
           <button 
             onClick={runOptimize} 
-            className="btn-secondary"
+            className="btn-secondary pill-btn"
             disabled={loading}
-            style={{ padding: '10px 24px' }}
           >
             🔍 参数优化
           </button>
           <button 
             onClick={runBacktest} 
-            className="btn-primary"
+            className="btn-primary pill-btn"
             disabled={loading}
-            style={{ padding: '10px 24px' }}
           >
-            {loading ? '回测中...' : '🚀 开始回测'}
+            {loading ? (
+              <>
+                <span className="btn-spinner"></span>
+                回测中...
+              </>
+            ) : (
+              <>
+                <span className="btn-icon">🚀</span>
+                开始回测
+              </>
+            )}
           </button>
         </div>
       </div>
@@ -269,39 +277,39 @@ export default function BacktestPage({ stocks }) {
       {/* 回测结果 */}
       {backtestResult && (
         <div>
-          {/* 资金曲线图 */}
-          <div className="section-card" style={{ marginBottom: '24px' }}>
+          {/* 资金曲线图 - 大圆角 */}
+          <div className="chart-container" style={{ marginBottom: '24px' }}>
             <div id="equity-chart" style={{ width: '100%', height: '400px' }}></div>
           </div>
 
-          {/* 核心指标 */}
+          {/* 核心指标网格 - 药丸形状 */}
           <div className="metrics-grid" style={{ marginBottom: '24px' }}>
-            <div className="metric-card">
+            <div className="metric-card-pill">
               <div className="metric-header">
                 <span className="metric-icon">💰</span>
                 <span className="metric-title">总收益率</span>
               </div>
-              <div className={`metric-value ${backtestResult.total_return >= 0 ? 'positive' : 'negative'}`} style={{ fontSize: '24px' }}>
+              <div className={`metric-value ${backtestResult.total_return >= 0 ? 'positive' : 'negative'}`}>
                 {backtestResult.total_return >= 0 ? '+' : ''}{backtestResult.total_return.toFixed(2)}%
               </div>
             </div>
 
-            <div className="metric-card">
+            <div className="metric-card-pill">
               <div className="metric-header">
                 <span className="metric-icon">📈</span>
                 <span className="metric-title">年化收益</span>
               </div>
-              <div className={`metric-value ${backtestResult.annualized_return >= 0 ? 'positive' : 'negative'}`} style={{ fontSize: '24px' }}>
+              <div className={`metric-value ${backtestResult.annualized_return >= 0 ? 'positive' : 'negative'}`}>
                 {backtestResult.annualized_return >= 0 ? '+' : ''}{backtestResult.annualized_return.toFixed(2)}%
               </div>
             </div>
 
-            <div className="metric-card">
+            <div className="metric-card-pill">
               <div className="metric-header">
                 <span className="metric-icon">🎯</span>
                 <span className="metric-title">胜率</span>
               </div>
-              <div className="metric-value" style={{ fontSize: '24px' }}>
+              <div className="metric-value">
                 {backtestResult.win_rate.toFixed(1)}%
               </div>
               <div className="metric-detail">
@@ -309,41 +317,41 @@ export default function BacktestPage({ stocks }) {
               </div>
             </div>
 
-            <div className="metric-card">
+            <div className="metric-card-pill danger">
               <div className="metric-header">
                 <span className="metric-icon">⚠️</span>
                 <span className="metric-title">最大回撤</span>
               </div>
-              <div className="metric-value negative" style={{ fontSize: '24px' }}>
+              <div className="metric-value negative">
                 {backtestResult.max_drawdown.toFixed(2)}%
               </div>
             </div>
 
-            <div className="metric-card">
+            <div className="metric-card-pill">
               <div className="metric-header">
                 <span className="metric-icon">📊</span>
                 <span className="metric-title">夏普比率</span>
               </div>
-              <div className="metric-value" style={{ fontSize: '24px' }}>
+              <div className="metric-value">
                 {backtestResult.sharpe_ratio.toFixed(2)}
               </div>
             </div>
 
-            <div className="metric-card">
+            <div className="metric-card-pill">
               <div className="metric-header">
                 <span className="metric-icon">🔄</span>
                 <span className="metric-title">交易次数</span>
               </div>
-              <div className="metric-value" style={{ fontSize: '24px' }}>
+              <div className="metric-value">
                 {backtestResult.trade_count} 次
               </div>
             </div>
           </div>
 
-          {/* 交易记录 */}
-          <div className="section-card">
-            <h3>📋 交易记录</h3>
-            <div style={{ overflowX: 'auto', maxHeight: '400px', overflowY: 'auto' }}>
+          {/* 交易记录 - 大圆角 */}
+          <div className="card" style={{ marginBottom: '24px' }}>
+            <h3 className="section-title">📋 交易记录</h3>
+            <div className="trades-table-container">
               <table className="data-table">
                 <thead>
                   <tr>
@@ -360,13 +368,7 @@ export default function BacktestPage({ stocks }) {
                     <tr key={idx}>
                       <td>{trade.date}</td>
                       <td>
-                        <span style={{
-                          padding: '2px 8px',
-                          borderRadius: '4px',
-                          fontSize: '12px',
-                          background: trade.type === 'buy' ? '#f6ffed' : '#fff1f0',
-                          color: trade.type === 'buy' ? '#52c41a' : '#f5222d'
-                        }}>
+                        <span className={`trade-badge ${trade.type}`}>
                           {trade.type === 'buy' ? '买入' : '卖出'}
                         </span>
                       </td>
@@ -383,10 +385,10 @@ export default function BacktestPage({ stocks }) {
             </div>
           </div>
 
-          {/* 策略说明 */}
-          <div className="section-card" style={{ marginTop: '24px' }}>
-            <h3>💡 策略说明</h3>
-            <div style={{ padding: '16px', background: '#f0f5ff', borderRadius: '8px', fontSize: '14px', lineHeight: '1.8', color: '#1890ff' }}>
+          {/* 策略说明 - 大圆角容器 */}
+          <div className="strategy-info-container">
+            <h3 className="section-title">💡 策略说明</h3>
+            <div className="strategy-description">
               {strategy === 'ma_cross' && (
                 <>
                   <strong>均线金叉/死叉策略：</strong><br/>
@@ -424,71 +426,79 @@ export default function BacktestPage({ stocks }) {
         </div>
       )}
 
-      {/* 参数优化结果 */}
+      {/* 参数优化结果弹窗 - 苹果风格 */}
       {showOptimize && optimizeResult && (
-        <div className="section-card" style={{ marginTop: '24px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-            <h3>🔍 参数优化结果</h3>
-            <button onClick={() => setShowOptimize(false)} style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer' }}>×</button>
-          </div>
-
-          {/* 最优参数 */}
-          {optimizeResult.best_params && (
-            <div style={{ padding: '16px', background: '#f6ffed', borderRadius: '8px', marginBottom: '16px', border: '2px solid #52c41a' }}>
-              <h4 style={{ color: '#52c41a', marginBottom: '12px' }}>🏆 最优参数组合</h4>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '12px' }}>
+        <div className="apple-modal-overlay" onClick={() => setShowOptimize(false)}>
+          <div className="apple-modal optimize-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="apple-modal-header">
+              <div className="apple-modal-title">
+                <div className="apple-modal-icon">🔍</div>
                 <div>
-                  <div style={{ fontSize: '12px', color: '#666' }}>参数</div>
-                  <div style={{ fontSize: '16px', fontWeight: 'bold' }}>{optimizeResult.best_params.params}</div>
-                </div>
-                <div>
-                  <div style={{ fontSize: '12px', color: '#666' }}>总收益率</div>
-                  <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#52c41a' }}>
-                    {optimizeResult.best_params.total_return >= 0 ? '+' : ''}{optimizeResult.best_params.total_return}%
-                  </div>
-                </div>
-                <div>
-                  <div style={{ fontSize: '12px', color: '#666' }}>胜率</div>
-                  <div style={{ fontSize: '16px', fontWeight: 'bold' }}>{optimizeResult.best_params.win_rate}%</div>
-                </div>
-                <div>
-                  <div style={{ fontSize: '12px', color: '#666' }}>交易次数</div>
-                  <div style={{ fontSize: '16px', fontWeight: 'bold' }}>{optimizeResult.best_params.trade_count}次</div>
+                  <h3>参数优化结果</h3>
+                  <p>对比不同参数组合的回测表现</p>
                 </div>
               </div>
+              <button className="apple-modal-close" onClick={() => setShowOptimize(false)}>✕</button>
             </div>
-          )}
 
-          {/* 所有参数对比 */}
-          <div style={{ overflowX: 'auto', maxHeight: '400px', overflowY: 'auto' }}>
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>排名</th>
-                  <th>参数组合</th>
-                  <th>总收益率</th>
-                  <th>胜率</th>
-                  <th>交易次数</th>
-                  <th>最终资金</th>
-                </tr>
-              </thead>
-              <tbody>
-                {optimizeResult.all_results.map((result, idx) => (
-                  <tr key={idx} style={{ background: idx === 0 ? '#f6ffed' : 'transparent' }}>
-                    <td>
-                      {idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : idx + 1}
-                    </td>
-                    <td><strong>{result.params}</strong></td>
-                    <td className={result.total_return >= 0 ? 'positive' : 'negative'}>
-                      {result.total_return >= 0 ? '+' : ''}{result.total_return}%
-                    </td>
-                    <td>{result.win_rate}%</td>
-                    <td>{result.trade_count}</td>
-                    <td>¥{result.final_capital.toLocaleString()}</td>
+            {/* 最优参数 */}
+            {optimizeResult.best_params && (
+              <div className="best-params-card">
+                <h4 className="best-params-title">🏆 最优参数组合</h4>
+                <div className="best-params-grid">
+                  <div className="param-stat">
+                    <div className="param-label">参数</div>
+                    <div className="param-value">{optimizeResult.best_params.params}</div>
+                  </div>
+                  <div className="param-stat">
+                    <div className="param-label">总收益率</div>
+                    <div className="param-value positive">
+                      {optimizeResult.best_params.total_return >= 0 ? '+' : ''}{optimizeResult.best_params.total_return}%
+                    </div>
+                  </div>
+                  <div className="param-stat">
+                    <div className="param-label">胜率</div>
+                    <div className="param-value">{optimizeResult.best_params.win_rate}%</div>
+                  </div>
+                  <div className="param-stat">
+                    <div className="param-label">交易次数</div>
+                    <div className="param-value">{optimizeResult.best_params.trade_count}次</div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* 所有参数对比表格 */}
+            <div className="optimize-table-container">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>排名</th>
+                    <th>参数组合</th>
+                    <th>总收益率</th>
+                    <th>胜率</th>
+                    <th>交易次数</th>
+                    <th>最终资金</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {optimizeResult.all_results.map((result, idx) => (
+                    <tr key={idx} className={idx === 0 ? 'best-row' : ''}>
+                      <td>
+                        {idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : idx + 1}
+                      </td>
+                      <td><strong>{result.params}</strong></td>
+                      <td className={result.total_return >= 0 ? 'positive' : 'negative'}>
+                        {result.total_return >= 0 ? '+' : ''}{result.total_return}%
+                      </td>
+                      <td>{result.win_rate}%</td>
+                      <td>{result.trade_count}</td>
+                      <td>¥{result.final_capital.toLocaleString()}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}

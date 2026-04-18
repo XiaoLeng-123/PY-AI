@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import axios from 'axios'
 import { toast } from '../components/Toast'
+import AppleSelect from '../components/AppleSelect'
 
 const API_BASE = 'http://127.0.0.1:5000/api'
 
@@ -14,6 +15,45 @@ export default function AlertPage({ stocks, selectedStock, toast }) {
     condition: 'above',
     threshold: ''
   })
+  
+  // 转换股票数据为选项格式
+  const stockOptions = useMemo(() => {
+    return stocks.map(s => ({
+      value: s.id,
+      label: `${s.code} - ${s.name}`,
+      code: s.code,
+      name: s.name
+    }))
+  }, [stocks])
+  
+  // 预警类型选项
+  const alertTypeOptions = [
+    { value: 'price', label: '💰 价格预警' },
+    { value: 'change', label: '📈 涨跌幅预警' },
+    { value: 'volume', label: '📊 成交量预警' },
+    { value: 'technical', label: '🎯 技术指标预警' }
+  ]
+  
+  // 触发条件选项（根据预警类型动态变化）
+  const conditionOptions = useMemo(() => {
+    if (alertForm.alert_type === 'technical') {
+      return [
+        { value: 'cross_up', label: 'MACD金叉' },
+        { value: 'cross_down', label: 'MACD死叉' },
+        { value: 'above', label: 'RSI超买(>70)' },
+        { value: 'below', label: 'RSI超卖(<30)' },
+        { value: 'ma_cross_up', label: '均线金叉' },
+        { value: 'ma_cross_down', label: '均线死叉' }
+      ]
+    } else {
+      return [
+        { value: 'above', label: '高于' },
+        { value: 'below', label: '低于' },
+        { value: 'cross_up', label: '上穿' },
+        { value: 'cross_down', label: '下穿' }
+      ]
+    }
+  }, [alertForm.alert_type])
   
   useEffect(() => {
     loadAlerts()
@@ -91,15 +131,21 @@ export default function AlertPage({ stocks, selectedStock, toast }) {
   
   return (
     <div className="page-content">
-      <div className="card">
-        <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px'}}>
-          <h3>🔔 预警系统</h3>
-          <div>
-            <button onClick={handleCheckAlerts} className="btn-secondary" style={{marginRight: '10px'}}>检查预警</button>
-            <button onClick={() => setShowAddModal(true)} className="btn-primary">+ 新建预警</button>
+      <div className="alert-header-card">
+        <div className="alert-header-content">
+          <div className="alert-header-icon">🔔</div>
+          <div className="alert-header-info">
+            <h3>预警系统</h3>
+            <p>实时监控股票价格、涨跌幅和技术指标变化</p>
           </div>
         </div>
+        <div className="alert-header-actions">
+          <button onClick={handleCheckAlerts} className="btn-secondary pill-btn">检查预警</button>
+          <button onClick={() => setShowAddModal(true)} className="btn-primary pill-btn">+ 新建预警</button>
+        </div>
+      </div>
         
+      <div className="card">
         {loading ? (
           <div className="loading">加载中...</div>
         ) : (
@@ -160,64 +206,92 @@ export default function AlertPage({ stocks, selectedStock, toast }) {
         )}
       </div>
       
-      {/* 创建预警弹窗 */}
+      {/* 创建预警弹窗 - 苹果风格 */}
       {showAddModal && (
-        <div style={{position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000}}>
-          <div className="card" style={{width: '500px', maxWidth: '90%'}}>
-            <h3>创建预警</h3>
+        <div className="apple-modal-overlay" onClick={() => setShowAddModal(false)}>
+          <div className="apple-modal" onClick={(e) => e.stopPropagation()}>
+            {/* 头部 */}
+            <div className="apple-modal-header">
+              <div className="apple-modal-title">
+                <div className="apple-modal-icon">🔔</div>
+                <div>
+                  <h3>创建预警</h3>
+                  <p>设置股票价格、涨跌幅或技术指标的预警条件</p>
+                </div>
+              </div>
+              <button className="apple-modal-close" onClick={() => setShowAddModal(false)}>✕</button>
+            </div>
+            
             <form onSubmit={handleAdd}>
-              <div className="form-item">
-                <label>选择股票</label>
-                <select value={alertForm.stock_id} onChange={(e) => setAlertForm({...alertForm, stock_id: e.target.value})} required>
-                  <option value="">请选择</option>
-                  {stocks.map(s => <option key={s.id} value={s.id}>{s.code} - {s.name}</option>)}
-                </select>
+              {/* 股票选择 */}
+              <div className="apple-form-group">
+                <label className="apple-label">
+                  <span className="label-icon">📊</span>
+                  选择股票
+                </label>
+                <AppleSelect
+                  options={stockOptions}
+                  value={alertForm.stock_id}
+                  onChange={(val) => setAlertForm({...alertForm, stock_id: val})}
+                  placeholder="搜索股票代码或名称..."
+                  filterFields={['code', 'name', 'label']}
+                  width="100%"
+                />
               </div>
-              <div className="form-item">
-                <label>预警类型</label>
-                <select value={alertForm.alert_type} onChange={(e) => setAlertForm({...alertForm, alert_type: e.target.value})}>
-                  <option value="price">价格预警</option>
-                  <option value="change">涨跌幅预警</option>
-                  <option value="volume">成交量预警</option>
-                  <option value="technical">技术指标预警</option>
-                </select>
+                          
+              {/* 预警类型 */}
+              <div className="apple-form-group">
+                <label className="apple-label">
+                  <span className="label-icon">🎯</span>
+                  预警类型
+                </label>
+                <AppleSelect
+                  options={alertTypeOptions}
+                  value={alertForm.alert_type}
+                  onChange={(val) => setAlertForm({...alertForm, alert_type: val})}
+                  placeholder="选择预警类型"
+                  filterFields={['label']}
+                  width="100%"
+                />
               </div>
-              <div className="form-item">
-                <label>触发条件</label>
-                <select value={alertForm.condition} onChange={(e) => setAlertForm({...alertForm, condition: e.target.value})}>
-                  {alertForm.alert_type === 'technical' ? (
-                    <>
-                      <option value="cross_up">MACD金叉</option>
-                      <option value="cross_down">MACD死叉</option>
-                      <option value="above">RSI超买(&gt;70)</option>
-                      <option value="below">RSI超卖(&lt;30)</option>
-                      <option value="ma_cross_up">均线金叉</option>
-                      <option value="ma_cross_down">均线死叉</option>
-                    </>
-                  ) : (
-                    <>
-                      <option value="above">高于</option>
-                      <option value="below">低于</option>
-                      <option value="cross_up">上穿</option>
-                      <option value="cross_down">下穿</option>
-                    </>
-                  )}
-                </select>
+                          
+              {/* 触发条件 */}
+              <div className="apple-form-group">
+                <label className="apple-label">
+                  <span className="label-icon">⚡</span>
+                  触发条件
+                </label>
+                <AppleSelect
+                  options={conditionOptions}
+                  value={alertForm.condition}
+                  onChange={(val) => setAlertForm({...alertForm, condition: val})}
+                  placeholder="选择触发条件"
+                  filterFields={['label']}
+                  width="100%"
+                />
               </div>
-              <div className="form-item">
-                <label>阈值</label>
+              
+              {/* 阈值输入 */}
+              <div className="apple-form-group">
+                <label className="apple-label">
+                  <span className="label-icon">🎚️</span>
+                  阈值
+                </label>
                 <input 
                   type="number" 
                   step="0.01" 
                   value={alertForm.threshold} 
                   onChange={(e) => setAlertForm({...alertForm, threshold: e.target.value})}
-                  placeholder={alertForm.alert_type === 'price' ? '价格' : '百分比'}
+                  placeholder={alertForm.alert_type === 'price' ? '输入目标价格' : '输入百分比'}
+                  className="apple-input"
                   required
                 />
               </div>
-              <div className="form-row" style={{justifyContent: 'flex-end'}}>
+              
+              {/* 按钮组 */}
+              <div className="apple-modal-footer">
                 <button type="button" className="btn-secondary" onClick={() => setShowAddModal(false)}>取消</button>
-                <button type="submit" className="btn-primary">创建</button>
+                <button type="submit" className="btn-primary">创建预警</button>
               </div>
             </form>
           </div>

@@ -4,12 +4,16 @@ import { toast } from '../components/Toast'
 
 const API_BASE = 'http://127.0.0.1:5000/api'
 
-export default function SectorAnalysisPage({ stocks }) {
+export default function SectorAnalysisPage() {
+  const [sectors, setSectors] = useState([])
+  const [statistics, setStatistics] = useState(null)
   const [rankings, setRankings] = useState(null)
-  const [overview, setOverview] = useState(null)
   const [loading, setLoading] = useState(false)
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0])
-  const [selectedMarket, setSelectedMarket] = useState('') // 选中的市场类型
+  const [selectedSector, setSelectedSector] = useState(null)
+  const [sectorStocks, setSectorStocks] = useState([])
+  const [showStocksModal, setShowStocksModal] = useState(false)
+  const [sortBy, setSortBy] = useState('change_pct') // change_pct, amount, main_net_inflow
+  const [filterType, setFilterType] = useState('all') // all, rising, falling
   
   useEffect(() => {
     loadOverview()
@@ -19,211 +23,316 @@ export default function SectorAnalysisPage({ stocks }) {
   const loadOverview = async () => {
     try {
       const response = await axios.get(`${API_BASE}/advanced/sectors/overview`)
-      setOverview(response.data)
+      if (response.data.success) {
+        setSectors(response.data.sectors)
+        setStatistics(response.data.statistics)
+      } else {
+        toast.error(response.data.message || '加载板块数据失败')
+      }
     } catch (error) {
       console.error('加载概况失败:', error)
+      toast.error('无法连接服务器')
     }
   }
   
   const loadRankings = async () => {
     setLoading(true)
     try {
-      const response = await axios.get(`${API_BASE}/advanced/sectors/rankings`, { params: { date } })
-      setRankings(response.data)
+      const response = await axios.get(`${API_BASE}/advanced/sectors/rankings`)
+      if (response.data.success) {
+        setRankings(response.data)
+      } else {
+        toast.error(response.data.message || '加载排行失败')
+      }
     } catch (error) {
-      toast.error('加载排行失败')
+      console.error('加载排行失败:', error)
+      toast.error('无法获取板块排行数据')
     } finally {
       setLoading(false)
     }
   }
   
+  const loadSectorStocks = async (sectorCode, sectorName) => {
+    try {
+      setLoading(true)
+      const response = await axios.get(`${API_BASE}/advanced/sectors/${sectorCode}/stocks`)
+      if (response.data.success) {
+        setSectorStocks(response.data.stocks)
+        setSelectedSector({ code: sectorCode, name: sectorName })
+        setShowStocksModal(true)
+      } else {
+        toast.error(response.data.message || '加载成分股失败')
+      }
+    } catch (error) {
+      console.error('加载成分股失败:', error)
+      toast.error('无法获取板块成分股')
+    } finally {
+      setLoading(false)
+    }
+  }
+  
+  // 过滤和排序板块
+  const filteredAndSortedSectors = sectors
+    .filter(sector => {
+      if (filterType === 'rising') return sector.change_pct > 0
+      if (filterType === 'falling') return sector.change_pct < 0
+      return true
+    })
+    .sort((a, b) => {
+      if (sortBy === 'change_pct') return b.change_pct - a.change_pct
+      if (sortBy === 'amount') return b.amount - a.amount
+      if (sortBy === 'main_net_inflow') return b.main_net_inflow - a.main_net_inflow
+      return 0
+    })
+  
   return (
     <div className="page-content">
-      <div className="card">
-        <h3>📊 板块分析</h3>
-        
-        {overview && (
-          <div style={{marginBottom: '20px'}}>
-            <h4>市场概况</h4>
-            <div className="stat-cards">
-              <div className="stat-box">
-                <div className="label">总股票数</div>
-                <div className="value primary">{overview.total_stocks}</div>
+      {/* 头部卡片 */}
+      <div className="sector-header-card">
+        <div className="header-icon">📊</div>
+        <div className="header-info">
+          <h3>板块分析</h3>
+          <p>实时查看行业板块涨跌排行、资金流向与成分股分析</p>
+        </div>
+        <button onClick={loadOverview} className="btn-primary pill-btn" disabled={loading}>
+          {loading ? '加载中...' : '🔄 刷新'}
+        </button>
+      </div>
+      
+      {/* 统计概览 */}
+      {statistics && (
+        <div className="card" style={{ marginBottom: '20px' }}>
+          <h4 className="section-title">📈 市场概况</h4>
+          <div className="sector-stats-grid">
+            <div className="sector-stat-card">
+              <div className="stat-label">板块总数</div>
+              <div className="stat-value primary">{statistics.total_sectors}</div>
+            </div>
+            <div className="sector-stat-card">
+              <div className="stat-label">上涨板块</div>
+              <div className="stat-value positive">{statistics.rising_sectors}</div>
+            </div>
+            <div className="sector-stat-card">
+              <div className="stat-label">下跌板块</div>
+              <div className="stat-value negative">{statistics.falling_sectors}</div>
+            </div>
+            <div className="sector-stat-card">
+              <div className="stat-label">平均涨跌幅</div>
+              <div className={`stat-value ${statistics.avg_change_pct >= 0 ? 'positive' : 'negative'}`}>
+                {statistics.avg_change_pct >= 0 ? '+' : ''}{statistics.avg_change_pct}%
               </div>
-              <div className="stat-box">
-                <div className="label">数据记录</div>
-                <div className="value">{overview.total_records}</div>
-              </div>
-              {overview.markets.map(m => (
-                <div className="stat-box" key={m.name}>
-                  <div className="label">{m.name}</div>
-                  <div className="value">{m.count}只</div>
-                </div>
-              ))}
             </div>
           </div>
-        )}
-        
-        <div className="form-item" style={{marginBottom: '20px'}}>
-          <label>查询日期</label>
-          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-          <button onClick={loadRankings} className="btn-primary" style={{marginLeft: '10px'}}>
-            {loading ? '加载中...' : '查询'}
+          <div style={{ marginTop: '12px', fontSize: '12px', color: '#999', textAlign: 'right' }}>
+            更新时间: {statistics.update_time}
+          </div>
+        </div>
+      )}
+      
+      {/* 查询控制区 - 药丸形状 */}
+      <div className="card" style={{ marginBottom: '20px' }}>
+        <div className="query-control-bar">
+          <div className="control-item">
+            <label className="control-label">筛选类型</label>
+            <select 
+              value={filterType} 
+              onChange={(e) => setFilterType(e.target.value)}
+              className="apple-select"
+            >
+              <option value="all">全部板块</option>
+              <option value="rising">仅看上涨</option>
+              <option value="falling">仅看下跌</option>
+            </select>
+          </div>
+          <div className="control-item">
+            <label className="control-label">排序方式</label>
+            <select 
+              value={sortBy} 
+              onChange={(e) => setSortBy(e.target.value)}
+              className="apple-select"
+            >
+              <option value="change_pct">按涨跌幅</option>
+              <option value="amount">按成交额</option>
+              <option value="main_net_inflow">按主力净流入</option>
+            </select>
+          </div>
+          <button 
+            onClick={loadRankings} 
+            className="btn-primary pill-btn"
+            disabled={loading}
+          >
+            {loading ? (
+              <>
+                <span className="btn-spinner"></span>
+                加载中...
+              </>
+            ) : (
+              <>
+                <span className="btn-icon">🔍</span>
+                查询排行
+              </>
+            )}
           </button>
         </div>
-        
-        {/* 同行业股票对比 */}
-        {stocks && stocks.length > 0 && (
-          <div style={{ marginBottom: '20px', padding: '16px', background: '#f0f5ff', borderRadius: '8px' }}>
-            <h4 style={{ marginBottom: '12px', color: '#1890ff' }}>🔗 同行业股票对比</h4>
-            <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
-              <div>
-                <label style={{ fontSize: '13px', color: '#666', marginRight: '8px' }}>选择市场类型：</label>
-                <select 
-                  value={selectedMarket} 
-                  onChange={(e) => setSelectedMarket(e.target.value)}
-                  style={{ padding: '6px 12px', border: '1px solid #d9d9d9', borderRadius: '4px' }}
-                >
-                  <option value="">全部</option>
-                  {[...new Set(stocks.map(s => s.market))].map(market => (
-                    <option key={market} value={market}>{market}</option>
-                  ))}
-                </select>
-              </div>
-              
-              {(() => {
-                const filteredStocks = selectedMarket 
-                  ? stocks.filter(s => s.market === selectedMarket)
-                  : stocks
-                
-                if (filteredStocks.length === 0) return null
-                
-                return (
-                  <div style={{ fontSize: '13px', color: '#666' }}>
-                    共 <strong style={{ color: '#1890ff' }}>{filteredStocks.length}</strong> 只股票
-                  </div>
-                )
-              })()}
-            </div>
-            
-            {/* 显示该市场的股票列表 */}
-            {(() => {
-              const filteredStocks = selectedMarket 
-                ? stocks.filter(s => s.market === selectedMarket)
-                : stocks.slice(0, 10) // 默认显示前10只
-              
-              if (filteredStocks.length === 0) return null
-              
-              return (
-                <div style={{ marginTop: '12px', overflowX: 'auto' }}>
-                  <table className="data-table" style={{ fontSize: '12px' }}>
-                    <thead>
-                      <tr>
-                        <th>代码</th>
-                        <th>名称</th>
-                        <th>市场</th>
-                        <th>操作</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredStocks.map(stock => (
-                        <tr key={stock.id}>
-                          <td>{stock.code}</td>
-                          <td>{stock.name}</td>
-                          <td>
-                            <span style={{
-                              padding: '2px 8px',
-                              background: '#e6f7ff',
-                              color: '#1890ff',
-                              borderRadius: '4px',
-                              fontSize: '11px'
-                            }}>
-                              {stock.market}
-                            </span>
-                          </td>
-                          <td>
-                            <button 
-                              onClick={() => {
-                                // 可以在这里添加跳转到数据查看页面的逻辑
-                                toast.info(`查看 ${stock.name} 详情`)
-                              }}
-                              style={{
-                                padding: '4px 8px',
-                                background: '#1890ff',
-                                color: '#fff',
-                                border: 'none',
-                                borderRadius: '4px',
-                                cursor: 'pointer',
-                                fontSize: '11px'
-                              }}
-                            >
-                              查看详情
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )
-            })()}
-          </div>
-        )}
-        
-        {rankings && (
-          <div>
-            <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px'}}>
-              <div>
-                <h4 style={{color: '#52c41a'}}>📈 涨幅Top 20</h4>
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>代码</th>
-                      <th>名称</th>
-                      <th>最新价</th>
-                      <th>涨跌幅</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rankings.gainers.map((s, i) => (
-                      <tr key={i}>
-                        <td>{s.code}</td>
-                        <td>{s.name}</td>
-                        <td>¥{s.close_price.toFixed(2)}</td>
-                        <td style={{color: '#f5222d', fontWeight: 'bold'}}>+{s.change_pct}%</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              
-              <div>
-                <h4 style={{color: '#f5222d'}}>📉 跌幅Top 20</h4>
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>代码</th>
-                      <th>名称</th>
-                      <th>最新价</th>
-                      <th>涨跌幅</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rankings.losers.map((s, i) => (
-                      <tr key={i}>
-                        <td>{s.code}</td>
-                        <td>{s.name}</td>
-                        <td>¥{s.close_price.toFixed(2)}</td>
-                        <td style={{color: '#52c41a', fontWeight: 'bold'}}>{s.change_pct}%</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
+      
+      {/* 板块列表 - 网格布局 */}
+      {filteredAndSortedSectors.length > 0 && (
+        <div className="card" style={{ marginBottom: '20px' }}>
+          <h4 className="section-title">🏢 行业板块列表</h4>
+          <div className="sector-grid">
+            {filteredAndSortedSectors.map((sector, index) => (
+              <div 
+                key={sector.code}
+                className={`sector-card ${sector.change_pct >= 0 ? 'positive' : 'negative'}`}
+                onClick={() => loadSectorStocks(sector.code, sector.name)}
+              >
+                <div className="sector-rank">#{index + 1}</div>
+                <div className="sector-name">{sector.name}</div>
+                <div className="sector-change">
+                  {sector.change_pct >= 0 ? '+' : ''}{sector.change_pct}%
+                </div>
+                <div className="sector-details">
+                  <div className="detail-row">
+                    <span>成交额:</span>
+                    <strong>{sector.amount}亿</strong>
+                  </div>
+                  <div className="detail-row">
+                    <span>主力:</span>
+                    <strong className={sector.main_net_inflow >= 0 ? 'positive' : 'negative'}>
+                      {sector.main_net_inflow >= 0 ? '+' : ''}{sector.main_net_inflow}万
+                    </strong>
+                  </div>
+                  <div className="detail-row">
+                    <span>成分股:</span>
+                    <strong>{sector.stock_count}只</strong>
+                  </div>
+                  <div className="detail-row">
+                    <span>涨/跌:</span>
+                    <strong>
+                      <span className="positive">{sector.rise_count}</span> / 
+                      <span className="negative">{sector.fall_count}</span>
+                    </strong>
+                  </div>
+                </div>
+                {sector.leading_stock && (
+                  <div className="leading-stock">
+                    领涨: {sector.leading_stock} ({sector.leading_stock_change >= 0 ? '+' : ''}{sector.leading_stock_change}%)
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      
+      {/* 涨跌排行 */}
+      {rankings && rankings.gainers.length > 0 && (
+        <div className="rankings-grid">
+          <div className="ranking-card gainers">
+            <h4 className="ranking-title">📈 涨幅Top 20</h4>
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>排名</th>
+                  <th>板块</th>
+                  <th>涨跌幅</th>
+                  <th>成交额</th>
+                  <th>主力流入</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rankings.gainers.map((sector, i) => (
+                  <tr key={i} onClick={() => loadSectorStocks(sector.code, sector.name)} style={{ cursor: 'pointer' }}>
+                    <td><span className="rank-badge top">{i + 1}</span></td>
+                    <td><strong>{sector.name}</strong></td>
+                    <td className="positive">+{sector.change_pct}%</td>
+                    <td>{sector.amount}亿</td>
+                    <td className="positive">+{sector.main_net_inflow}万</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          
+          <div className="ranking-card losers">
+            <h4 className="ranking-title">📉 跌幅Top 20</h4>
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>排名</th>
+                  <th>板块</th>
+                  <th>涨跌幅</th>
+                  <th>成交额</th>
+                  <th>主力流出</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rankings.losers.map((sector, i) => (
+                  <tr key={i} onClick={() => loadSectorStocks(sector.code, sector.name)} style={{ cursor: 'pointer' }}>
+                    <td><span className="rank-badge bottom">{i + 1}</span></td>
+                    <td><strong>{sector.name}</strong></td>
+                    <td className="negative">{sector.change_pct}%</td>
+                    <td>{sector.amount}亿</td>
+                    <td className="negative">{sector.main_net_inflow}万</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+      
+      {/* 成分股弹窗 */}
+      {showStocksModal && selectedSector && (
+        <div className="apple-modal-overlay" onClick={() => setShowStocksModal(false)}>
+          <div className="apple-modal large" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div>
+                <h3>📋 {selectedSector.name} - 成分股</h3>
+                <p>共 {sectorStocks.length} 只股票</p>
+              </div>
+              <button onClick={() => setShowStocksModal(false)} className="modal-close-btn">✕</button>
+            </div>
+            <div className="modal-body">
+              {sectorStocks.length > 0 ? (
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>代码</th>
+                      <th>名称</th>
+                      <th>最新价</th>
+                      <th>涨跌幅</th>
+                      <th>成交量</th>
+                      <th>成交额</th>
+                      <th>换手率</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sectorStocks.map((stock, i) => (
+                      <tr key={i}>
+                        <td>{stock.code}</td>
+                        <td><strong>{stock.name}</strong></td>
+                        <td>¥{stock.close_price.toFixed(2)}</td>
+                        <td className={stock.change_pct >= 0 ? 'positive' : 'negative'}>
+                          {stock.change_pct >= 0 ? '+' : ''}{stock.change_pct}%
+                        </td>
+                        <td>{stock.volume}万手</td>
+                        <td>{stock.amount}万</td>
+                        <td>{stock.turnover_rate}%</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <div style={{ textAlign: 'center', padding: '40px', color: '#999' }}>
+                  暂无成分股数据
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

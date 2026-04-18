@@ -8,7 +8,7 @@ const ComparePage = ({ stocks, toast }) => {
 
   const handleCompare = async () => {
     if (selectedStocks.length < 2) {
-      toast.error('请至少选择2只小马')
+      toast.error('请至少选择2只股票')
       return
     }
     
@@ -31,57 +31,84 @@ const ComparePage = ({ stocks, toast }) => {
       if (selectedStocks.length < 5) {
         setSelectedStocks([...selectedStocks, id])
       } else {
-        toast.warning('最多选择5只小马')
+        toast.warning('最多选择5只股票')
       }
     }
   }
 
   return (
     <div className="page-content">
-      <div className="page-header">
-        <h2>⚖️ 多维度对比分析</h2>
+      {/* 头部卡片 */}
+      <div className="compare-header-card">
+        <div className="header-icon">⚖️</div>
+        <div className="header-info">
+          <h3>多维度对比分析</h3>
+          <p>同时对比多只股票的关键指标，辅助投资决策</p>
+        </div>
       </div>
 
+      {/* 选择股票区 - 药丸形状 */}
       <div className="card" style={{marginBottom: '24px'}}>
-        <h3>选择要对比的小马（最多5只）</h3>
-        <div style={{display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap'}}>
+        <h3 className="section-title">选择要对比的股票（最多5只）</h3>
+        <div className="compare-stock-selector">
           {stocks.map(stock => (
-            <label key={stock.id} style={{
-              padding: '8px 16px',
-              border: selectedStocks.includes(String(stock.id)) ? '2px solid #1890ff' : '1px solid #d9d9d9',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              background: selectedStocks.includes(String(stock.id)) ? '#e6f7ff' : '#fff'
-            }}>
+            <label 
+              key={stock.id} 
+              className={`compare-stock-item ${selectedStocks.includes(String(stock.id)) ? 'selected' : ''}`}
+              onClick={() => toggleStock(stock.id)}
+            >
               <input
                 type="checkbox"
                 checked={selectedStocks.includes(String(stock.id))}
                 onChange={() => toggleStock(stock.id)}
-                style={{marginRight: '8px'}}
+                className="apple-checkbox"
               />
-              {stock.code} - {stock.name}
+              <span className="stock-code">{stock.code}</span>
+              <span className="stock-name">{stock.name}</span>
             </label>
           ))}
         </div>
-        <button 
-          onClick={handleCompare}
-          className="btn-primary"
-          disabled={loading || selectedStocks.length < 2}
-        >
-          {loading ? '对比中...' : '开始对比'}
-        </button>
+        
+        <div className="compare-actions">
+          <div className="selected-count">
+            已选择 <strong>{selectedStocks.length}</strong> / 5 只股票
+          </div>
+          <button 
+            onClick={handleCompare}
+            className="btn-primary pill-btn"
+            disabled={loading || selectedStocks.length < 2}
+          >
+            {loading ? (
+              <>
+                <span className="btn-spinner"></span>
+                对比中...
+              </>
+            ) : (
+              <>
+                <span className="btn-icon">📊</span>
+                开始对比
+              </>
+            )}
+          </button>
+        </div>
       </div>
 
+      {/* 对比结果 - 大圆角表格 */}
       {compareResult && compareResult.stocks.length > 0 && (
-        <div className="section-card">
-          <h3>对比结果</h3>
-          <div style={{overflowX: 'auto'}}>
+        <div className="card">
+          <h3 className="section-title">对比结果</h3>
+          <div className="compare-table-container">
             <table className="data-table">
               <thead>
                 <tr>
                   <th>指标</th>
                   {compareResult.stocks.map(stock => (
-                    <th key={stock.stock_id}>{stock.stock_code}<br/>{stock.stock_name}</th>
+                    <th key={stock.stock_id}>
+                      <div className="stock-header">
+                        <span className="stock-code">{stock.stock_code}</span>
+                        <span className="stock-name">{stock.stock_name}</span>
+                      </div>
+                    </th>
                   ))}
                 </tr>
               </thead>

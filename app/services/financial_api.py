@@ -594,74 +594,316 @@ def analyze_financial_data(reports, stock_name, latest_price, stock_code=None):
 
 
 def get_all_stock_codes():
-    """获取所有A股股票代码和名称列表（东方财富API）"""
+    """获取所有A股股票代码和名称列表（多接口备选方案）"""
+    import time
+    
+    # 尝试方法1: 新浪股票列表API（最稳定）
     try:
-        all_stocks = []
-        page = 1
-        page_size = 500  # 每页500条
+        print("\n[方法1] 尝试新浪股票列表API...")
+        stocks = _get_stocks_from_sina()
+        if stocks and len(stocks) > 100:
+            print(f"✅ 新浪API成功: 获取 {len(stocks)} 只股票")
+            return stocks
+        else:
+            print(f"⚠️ 新浪API返回数据不足: {len(stocks) if stocks else 0} 只")
+    except Exception as e:
+        print(f"❌ 新浪API失败: {str(e)[:100]}")
+    
+    # 尝试方法2: 同花顺股票列表API
+    try:
+        print("\n[方法2] 尝试同花顺股票列表API...")
+        stocks = _get_stocks_from_ths()
+        if stocks and len(stocks) > 100:
+            print(f"✅ 同花顺API成功: 获取 {len(stocks)} 只股票")
+            return stocks
+        else:
+            print(f"⚠️ 同花顺API返回数据不足: {len(stocks) if stocks else 0} 只")
+    except Exception as e:
+        print(f"❌ 同花顺API失败: {str(e)[:100]}")
+    
+    # 尝试方法3: 东方财富（原有方法，作为最后备选）
+    try:
+        print("\n[方法3] 尝试东方财富股票列表API...")
+        stocks = _get_stocks_from_eastmoney()
+        if stocks and len(stocks) > 100:
+            print(f"✅ 东方财富API成功: 获取 {len(stocks)} 只股票")
+            return stocks
+        else:
+            print(f"⚠️ 东方财富API返回数据不足: {len(stocks) if stocks else 0} 只")
+    except Exception as e:
+        print(f"❌ 东方财富API失败: {str(e)[:100]}")
+    
+    print("\n❌ 所有API均失败，建议检查网络连接或稍后重试")
+    return []
+
+
+def _get_stocks_from_sina():
+    """从新浪API获取股票列表（最稳定）- 支持分页获取全部股票"""
+    import requests
+    import time
+    all_stocks = []
+    
+    # 新浪A股列表API - 分批获取（支持多页）
+    # 沪市A股 (60开头)
+    try:
+        print("[新浪API] 获取沪市A股...")
+        url_sh = "http://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData"
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'Referer': 'http://vip.stock.finance.sina.com.cn/'
+        }
         
+        page = 1
         while True:
-            # 东方财富股票列表API
-            url = "https://push2.eastmoney.com/api/qt/clist/get"
-            params = {
-                'pn': str(page),
-                'pz': str(page_size),
-                'po': '1',
-                'np': '1',
-                'ut': 'bd1d9ddb04089700cf9c27f6f7426281',
-                'fltt': '2',
-                'invt': '2',
-                'fid': 'f3',
-                'fs': 'm:0 t:6,m:0 t:80,m:1 t:2,m:1 t:23,m:0 t:81 s:2048',  # A股筛选条件
-                'fields': 'f12,f14'  # f12=代码, f14=名称
+            params_sh = {
+                'page': str(page),
+                'num': '80',  # 每页80只（新浪限制）
+                'sort': 'symbol',
+                'asc': '1',
+                'node': 'sh_a',  # 沪市A股
+                'symbol': '',
+                '_s_r_a': 'page'
             }
             
-            headers = {
-                'Referer': 'https://quote.eastmoney.com/',
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-            }
-            
-            resp = requests.get(url, params=params, headers=headers, timeout=15)
-            if resp.status_code != 200:
-                print(f"请求失败，状态码: {resp.status_code}")
+            resp = requests.get(url_sh, params=params_sh, headers=headers, timeout=15)
+            if resp.status_code == 200:
+                import json
+                data = resp.json()
+                if not data or len(data) == 0:
+                    print(f"[新浪API] 沪市A股第{page}页无数据，停止")
+                    break
+                
+                count = 0
+                for stock in data:
+                    code = stock.get('code', '')
+                    name = stock.get('name', '')
+                    if code and name and code.startswith('6'):
+                        all_stocks.append({'code': code, 'name': name})
+                        count += 1
+                
+                print(f"[新浪API] 沪市A股第{page}页: {count}只，累计{len(all_stocks)}只")
+                
+                if len(data) < 80:
+                    print(f"[新浪API] 沪市A股已达最后一页")
+                    break
+                
+                page += 1
+                time.sleep(0.5)  # 避免请求过快
+                
+                if page > 30:  # 最多30页（约2400只）
+                    print(f"[新浪API] 沪市A股已达最大页数限制")
+                    break
+            else:
+                print(f"[新浪API] 沪市A股第{page}页失败: HTTP {resp.status_code}")
                 break
                 
-            data = resp.json()
-            if not data.get('data') or not data['data'].get('diff'):
-                print("未获取更多股票数据")
-                break
-            
-            stocks = data['data']['diff']
-            for stock in stocks:
-                code = stock.get('f12', '')
-                name = stock.get('f14', '')
-                if code and name:
-                    all_stocks.append({
-                        'code': code,
-                        'name': name
-                    })
-            
-            print(f"第{page}页: 获取到 {len(stocks)} 只股票，累计 {len(all_stocks)} 只")
-            
-            # 如果返回的数据少于页面大小，说明已经是最后一页
-            if len(stocks) < page_size:
-                break
-            
-            page += 1
-            
-            # 防止请求过多，最多获取60页（6000只股票）
-            if page > 60:
-                print("已达到最大页数限制")
-                break
-        
-        print(f"成功获取 {len(all_stocks)} 只A股股票")
-        return all_stocks
-        
+        print(f"[新浪API] 沪市A股总计: {len([s for s in all_stocks if s['code'].startswith('6')])} 只")
     except Exception as e:
-        print(f"获取股票列表失败: {e}")
-        import traceback
-        traceback.print_exc()
-        return []
+        print(f"[新浪API] 沪市A股失败: {e}")
+    
+    # 深市A股 (00/30开头)
+    try:
+        print("[新浪API] 获取深市A股...")
+        url_sz = "http://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData"
+        
+        page = 1
+        while True:
+            params_sz = {
+                'page': str(page),
+                'num': '80',  # 每页80只
+                'sort': 'symbol',
+                'asc': '1',
+                'node': 'sz_a',  # 深市A股
+                'symbol': '',
+                '_s_r_a': 'page'
+            }
+            
+            resp = requests.get(url_sz, params=params_sz, headers=headers, timeout=15)
+            if resp.status_code == 200:
+                import json
+                data = resp.json()
+                if not data or len(data) == 0:
+                    print(f"[新浪API] 深市A股第{page}页无数据，停止")
+                    break
+                
+                count = 0
+                for stock in data:
+                    code = stock.get('code', '')
+                    name = stock.get('name', '')
+                    if code and name and (code.startswith('0') or code.startswith('3')):
+                        all_stocks.append({'code': code, 'name': name})
+                        count += 1
+                
+                print(f"[新浪API] 深市A股第{page}页: {count}只，累计{len(all_stocks)}只")
+                
+                if len(data) < 80:
+                    print(f"[新浪API] 深市A股已达最后一页")
+                    break
+                
+                page += 1
+                time.sleep(0.5)
+                
+                if page > 40:  # 最多40页（约3200只）
+                    print(f"[新浪API] 深市A股已达最大页数限制")
+                    break
+            else:
+                print(f"[新浪API] 深市A股第{page}页失败: HTTP {resp.status_code}")
+                break
+                
+        print(f"[新浪API] 深市A股总计: {len([s for s in all_stocks if s['code'].startswith(('0', '3'))])} 只")
+    except Exception as e:
+        print(f"[新浪API] 深市A股失败: {e}")
+    
+    print(f"[新浪API] 总计: {len(all_stocks)} 只股票")
+    return all_stocks
+
+
+def _get_stocks_from_ths():
+    """从同花顺API获取股票列表"""
+    import requests
+    all_stocks = []
+    
+    try:
+        # 同花顺问财API
+        url = "http://www.iwencai.com/unifiedwap/result"
+        params = {
+            'w': 'A股列表',
+            'querytype': 'stock',
+            'secid': ''
+        }
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'Referer': 'http://www.iwencai.com/',
+            'Content-Type': 'application/json'
+        }
+        
+        resp = requests.post(url, json=params, headers=headers, timeout=15)
+        if resp.status_code == 200:
+            data = resp.json()
+            if data.get('data') and data['data'].get('answer'):
+                answer = data['data']['answer']
+                if answer.get('components'):
+                    for component in answer['components']:
+                        if component.get('type') == 'table' and component.get('data'):
+                            table_data = component['data']
+                            if table_data.get('datas'):
+                                for row in table_data['datas']:
+                                    # 提取代码和名称字段（可能因接口变化而不同）
+                                    code = row.get('code') or row.get('股票代码') or ''
+                                    name = row.get('name') or row.get('股票名称') or ''
+                                    if code and name:
+                                        all_stocks.append({'code': str(code), 'name': name})
+    except Exception as e:
+        print(f"[同花顺API] 失败: {e}")
+    
+    return all_stocks
+
+
+def _get_stocks_from_eastmoney():
+    """从东方财富API获取股票列表（原有方法）- 优化分页逻辑"""
+    import requests
+    import time
+    
+    all_stocks = []
+    page = 1
+    page_size = 200  # 每页200只
+    max_retries = 5  # 增加重试次数
+    
+    while True:
+        success = False
+        stocks = []
+        for attempt in range(max_retries):
+            try:
+                print(f"\n[东方财富API] 第{page}页 - 尝试第 {attempt + 1}/{max_retries} 次...")
+                
+                urls = [
+                    "https://push2.eastmoney.com/api/qt/clist/get",
+                    "http://push2.eastmoney.com/api/qt/clist/get"
+                ]
+                
+                last_error = None
+                for url in urls:
+                    try:
+                        params = {
+                            'pn': str(page),
+                            'pz': str(page_size),
+                            'po': '1',
+                            'np': '1',
+                            'ut': 'bd1d9ddb04089700cf9c27f6f7426281',
+                            'fltt': '2',
+                            'invt': '2',
+                            'fid': 'f3',
+                            'fs': 'm:0 t:6,m:0 t:80,m:1 t:2,m:1 t:23,m:0 t:81 s:2048',
+                            'fields': 'f12,f14'
+                        }
+                        
+                        headers = {
+                            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                            'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+                            'Connection': 'keep-alive',
+                            'Referer': 'https://quote.eastmoney.com/',
+                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36'
+                        }
+                        
+                        resp = requests.get(url, params=params, headers=headers, timeout=15)
+                        
+                        if resp.status_code != 200:
+                            last_error = Exception(f"HTTP {resp.status_code}")
+                            continue
+                        
+                        data = resp.json()
+                        if not data.get('data') or not data['data'].get('diff'):
+                            print("[东方财富API] 返回数据为空")
+                            return all_stocks
+                        
+                        stocks = data['data']['diff']
+                        for stock in stocks:
+                            code = stock.get('f12', '')
+                            name = stock.get('f14', '')
+                            if code and name:
+                                all_stocks.append({'code': code, 'name': name})
+                        
+                        print(f"[东方财富API] ✓ 第{page}页: {len(stocks)}只，累计{len(all_stocks)}只")
+                        success = True
+                        break  # 成功则跳出URL循环
+                        
+                    except Exception as e:
+                        last_error = e
+                        continue
+                
+                if not success:
+                    if last_error:
+                        print(f"[东方财富API] ✗ 所有URL失败: {str(last_error)[:80]}")
+                    if attempt < max_retries - 1:
+                        wait_time = 3 * (attempt + 1)
+                        print(f"[东方财富API] ⏳ 等待 {wait_time} 秒后重试...")
+                        time.sleep(wait_time)
+                        continue
+                    else:
+                        break
+                
+                time.sleep(0.5)
+                break  # 成功则跳出重试循环
+                
+            except Exception as e:
+                print(f"[东方财富API] ✗ 错误（第{attempt+1}次）: {str(e)[:80]}")
+                if attempt == max_retries - 1:
+                    return all_stocks
+                time.sleep(3)
+        
+        if not success:
+            break
+        
+        if len(stocks) < page_size:
+            print(f"[东方财富API] 最后一页，停止获取")
+            break
+        
+        page += 1
+        if page > 30:  # 最多30页（约6000只）
+            print(f"[东方财富API] 已达最大页数限制")
+            break
+    
+    return all_stocks
 
 
 def search_stock_by_code(code):
@@ -837,7 +1079,7 @@ def get_realtime_price(code):
 
 
 def get_stock_history_kline(stock_code, start_date, end_date):
-    """从东方财富API获取股票历史K线数据
+    """获取股票历史K线数据 - 多重备用API策略（腾讯财经 -> AkShare）
     
     Args:
         stock_code: 股票代码，如 '600775'
@@ -847,62 +1089,126 @@ def get_stock_history_kline(stock_code, start_date, end_date):
     Returns:
         list: K线数据列表，每条包含 {date, open, high, low, close, volume}
     """
-    try:
-        secid = f'1.{stock_code}' if stock_code.startswith('6') else f'0.{stock_code}'
-        
-        # 东方财富K线API
-        url = "https://push2his.eastmoney.com/api/qt/stock/kline/get"
-        params = {
-            'secid': secid,
-            'fields1': 'f1,f2,f3,f4,f5,f6',
-            'fields2': 'f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61',
-            'klt': '101',  # 日K线
-            'fqt': '1',  # 前复权
-            'beg': start_date.replace('-', ''),
-            'end': end_date.replace('-', ''),
-            'lmt': '10000',  # 最大返回10000条
-            'ut': 'fa5fd1943c7b386f172d6893dbfba10b'
-        }
-        
-        headers = {
-            'Referer': 'https://quote.eastmoney.com/',
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        }
-        
-        print(f"获取历史K线: {stock_code} {start_date} ~ {end_date}")
-        resp = requests.get(url, params=params, headers=headers, timeout=15)
-        
-        if resp.status_code == 200:
-            data = resp.json()
-            if data.get('data') and data['data'].get('klines'):
-                klines = data['data']['klines']
-                print(f"成功获取 {len(klines)} 条K线数据")
+    # 策略1: 腾讯财经API（主）
+    result = _get_kline_from_tencent(stock_code, start_date, end_date)
+    if result:
+        return result
+    
+    # 策略2: AkShare备用（带重试）
+    print(f"⚠️ 腾讯财经失败，切换到AkShare备用API...")
+    result = _get_kline_from_akshare(stock_code, start_date, end_date, max_retries=3)
+    return result
+
+
+def _get_kline_from_tencent(stock_code, start_date, end_date, retries=3):
+    """从腾讯财经获取K线（带重试）"""
+    for attempt in range(1, retries + 1):
+        try:
+            import requests
+            import time
+            
+            market_prefix = 'sh' if stock_code.startswith('6') else 'sz'
+            full_code = f'{market_prefix}{stock_code}'
+            
+            if attempt > 1:
+                print(f"🔄 腾讯财经第 {attempt} 次重试...")
+                time.sleep(1)  # 重试前等待1秒
+            
+            url = "http://web.ifzq.gtimg.cn/appstock/app/fqkline/get"
+            params = {
+                'param': f'{full_code},day,{start_date},{end_date},1000,qfq'
+            }
+            
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Referer': 'https://gu.qq.com/'
+            }
+            
+            resp = requests.get(url, params=params, headers=headers, timeout=15)
+            
+            if resp.status_code == 200:
+                data = resp.json()
                 
+                if data.get('code') == 0 and data.get('data'):
+                    stock_data = data['data'].get(full_code)
+                    if stock_data and stock_data.get('qfqday'):
+                        klines = stock_data['qfqday']
+                        print(f"✅ 成功从腾讯财经获取 {len(klines)} 条K线数据")
+                        
+                        result = []
+                        for kline in klines:
+                            if len(kline) >= 6:
+                                result.append({
+                                    'date': kline[0],
+                                    'open': float(kline[1]),
+                                    'close': float(kline[2]),
+                                    'high': float(kline[3]),
+                                    'low': float(kline[4]),
+                                    'volume': int(float(kline[5]))
+                                })
+                        
+                        return result
+                    else:
+                        print(f"⚠️ 未找到{full_code}的K线数据")
+                        return []
+                else:
+                    print(f"❌ API返回错误: {data.get('msg', '未知错误')}")
+                    return []
+            else:
+                print(f"❌ 请求失败，状态码: {resp.status_code}")
+                return []
+                
+        except Exception as e:
+            print(f"⚠️ 腾讯财经第 {attempt} 次失败: {e}")
+            if attempt == retries:
+                print(f"❌ 腾讯财经API完全失败，已尝试 {retries} 次")
+                return []
+    
+    return []
+
+
+def _get_kline_from_akshare(stock_code, start_date, end_date, max_retries=3):
+    """从AkShare获取K线（备用方案，带重试）"""
+    for attempt in range(1, max_retries + 1):
+        try:
+            import akshare as ak
+            import time
+            
+            if attempt > 1:
+                print(f"🔄 AkShare第 {attempt} 次重试...")
+                time.sleep(2)  # 重试前等待2秒
+            
+            print(f"📊 使用AkShare获取 {stock_code} 的K线数据...")
+            
+            # 使用AkShare的前复权日K线
+            df = ak.stock_zh_a_hist(
+                symbol=stock_code,
+                period="daily",
+                start_date=start_date.replace('-', ''),
+                end_date=end_date.replace('-', ''),
+                adjust="qfq"  # 前复权
+            )
+            
+            if df is not None and len(df) > 0:
                 result = []
-                for kline in klines:
-                    # kline格式: "2024-01-15,10.50,10.80,10.30,10.60,100000,1050000,1.5,0.2,0.3,0.4"
-                    # 对应: 日期,开盘,收盘,最高,最低,成交量,成交额,振幅,涨跌幅,涨跌额,换手率
-                    parts = kline.split(',')
-                    if len(parts) >= 6:
-                        result.append({
-                            'date': parts[0],
-                            'open': float(parts[1]) if parts[1] else 0,
-                            'close': float(parts[2]) if parts[2] else 0,
-                            'high': float(parts[3]) if parts[3] else 0,
-                            'low': float(parts[4]) if parts[4] else 0,
-                            'volume': int(parts[5]) if parts[5] else 0
-                        })
+                for _, row in df.iterrows():
+                    result.append({
+                        'date': str(row['日期']).split(' ')[0],
+                        'open': float(row['开盘']),
+                        'close': float(row['收盘']),
+                        'high': float(row['最高']),
+                        'low': float(row['最低']),
+                        'volume': int(row['成交量'])
+                    })
                 
+                print(f"✅ 成功从AkShare获取 {len(result)} 条K线数据")
                 return result
             else:
-                print(f"未获取到K线数据: {data.get('message', '未知错误')}")
+                print(f"⚠️ AkShare未返回数据")
                 return []
-        else:
-            print(f"请求失败，状态码: {resp.status_code}")
-            return []
-            
-    except Exception as e:
-        print(f"获取历史K线失败: {e}")
-        import traceback
-        traceback.print_exc()
-        return []
+                
+        except Exception as e:
+            print(f"⚠️ AkShare第 {attempt} 次失败: {e}")
+            if attempt == max_retries:
+                print(f"❌ AkShare备用API也失败，已尝试 {max_retries} 次")
+                return []

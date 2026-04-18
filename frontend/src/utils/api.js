@@ -51,7 +51,7 @@ export const compareAPI = {
 
 // 智能选股API
 export const screenerAPI = {
-  screen: (filters) => axios.post(`${API_BASE}/screener`, filters),
+  screen: (filters) => axios.post(`${API_BASE}/advanced/screener`, filters),
 }
 
 // 数据导入导出API

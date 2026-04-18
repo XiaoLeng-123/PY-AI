@@ -50,56 +50,89 @@ export default function AiAnalysisPage({ selectedStock, stocks }) {
     }
   }
   
+  const currentStock = stocks.find(s => s.id === Number(selectedStock))
+  
   return (
     <div className="page-content">
-      <div className="card">
-        <h3>🤖 AI智能分析</h3>
+      {/* 头部卡片 */}
+      <div className="ai-header-card">
+        <div className="header-icon">🤖</div>
+        <div className="header-info">
+          <h3>AI智能分析</h3>
+          <p>基于人工智能的股票分析与智能问答</p>
+        </div>
+      </div>
         
-        {selectedStock && (
-          <div className="form-item" style={{marginBottom: '15px'}}>
-            <label>当前分析股票</label>
-            <div style={{padding: '8px 12px', background: '#f0f5ff', borderRadius: '4px'}}>
-              {stocks.find(s => s.id === Number(selectedStock))?.name} ({stocks.find(s => s.id === Number(selectedStock))?.code})
-            </div>
+      {selectedStock && (
+        <div className="card" style={{marginBottom: '20px'}}>
+          <div className="current-stock-badge">
+            <span className="badge-icon">📊</span>
+            <span>当前分析：</span>
+            <strong>{currentStock?.name}</strong>
+            <span className="stock-code">({currentStock?.code})</span>
           </div>
-        )}
+        </div>
+      )}
         
-        <div className="form-item">
-          <label>提问或分析要求</label>
+      {/* 输入区域 - 药丸形状 */}
+      <div className="card" style={{marginBottom: '20px'}}>
+        <div className="ai-input-group">
+          <label className="control-label">提问或分析要求</label>
           <textarea
             value={aiQuestion}
             onChange={(e) => setAiQuestion(e.target.value)}
             placeholder="例如: 请分析这只股票的未来走势，或者输入任何你想问的问题..."
             rows={4}
-            style={{width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid #d9d9d9'}}
+            className="apple-input apple-textarea"
           />
         </div>
         
-        <div className="form-item">
-          <label>分析日期(可选)</label>
+        <div className="ai-input-group">
+          <label className="control-label">分析日期（可选）</label>
           <input
             type="date"
             value={aiQueryDate}
             onChange={(e) => setAiQueryDate(e.target.value)}
+            className="apple-input date-input"
           />
         </div>
         
-        <div className="form-row">
-          <button onClick={handleAiAnalyze} className="btn-primary" disabled={aiAnalyzing}>
-            {aiAnalyzing ? '分析中...' : '📊 股票分析'}
+        <div className="ai-actions">
+          <button 
+            onClick={handleAiAnalyze} 
+            className="btn-primary pill-btn"
+            disabled={aiAnalyzing}
+          >
+            {aiAnalyzing ? (
+              <>
+                <span className="btn-spinner"></span>
+                分析中...
+              </>
+            ) : (
+              <>
+                <span className="btn-icon">📊</span>
+                股票分析
+              </>
+            )}
           </button>
-          <button onClick={handleAiChat} className="btn-secondary" disabled={aiAnalyzing}>
+          <button 
+            onClick={handleAiChat} 
+            className="btn-secondary pill-btn"
+            disabled={aiAnalyzing}
+          >
             💬 通用对话
           </button>
         </div>
+      </div>
         
-        {aiAnswer && (
-          <div style={{marginTop: '20px', padding: '15px', background: '#f6ffed', borderRadius: '8px', whiteSpace: 'pre-wrap'}}>
-            <h4 style={{marginTop: 0}}>AI回复:</h4>
+      {aiAnswer && (
+        <div className="ai-answer-container">
+          <h4 className="answer-title">AI回复</h4>
+          <div className="answer-content">
             {aiAnswer}
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   )
 }

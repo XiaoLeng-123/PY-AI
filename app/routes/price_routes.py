@@ -11,13 +11,14 @@ price_bp = Blueprint('prices', __name__, url_prefix='/api/stocks')
 
 @price_bp.route('/<int:stock_id>/prices', methods=['GET'])
 def get_stock_prices(stock_id):
-    """获取股票历史价格数据"""
+    """获取股票历史价格数据（支持日K/周K/月K）"""
     stock = Stock.query.get_or_404(stock_id)
     
     # 可选的日期范围参数
     start_date = request.args.get('start_date')
     end_date = request.args.get('end_date')
     days = request.args.get('days', type=int)  # 最近N天
+    period = request.args.get('period', 'day')  # day/week/month
     
     query = StockPrice.query.filter_by(stock_id=stock_id)
     
@@ -32,15 +33,75 @@ def get_stock_prices(stock_id):
     else:
         prices = query.order_by(StockPrice.date.desc()).all()
     
-    return jsonify([{
-        'id': price.id,
-        'date': price.date.isoformat(),
-        'open': price.open_price,
-        'high': price.high_price,
-        'low': price.low_price,
-        'close': price.close_price,
-        'volume': price.volume
-    } for price in prices])
+    # 如果是日K，直接返回
+    if period == 'day':
+        return jsonify([{
+            'id': price.id,
+            'date': price.date.isoformat(),
+            'open': price.open_price,
+            'high': price.high_price,
+            'low': price.low_price,
+            'close': price.close_price,
+            'volume': price.volume
+        } for price in prices])
+    
+    # 周K或月K需要聚合
+    # 先按时间正序排列
+    prices_sorted = sorted(prices, key=lambda p: p.date)
+    
+    # 聚合函数
+    def aggregate_prices(prices_list, period_type):
+        """将日线数据聚合为周线或月线"""
+        if not prices_list:
+            return []
+        
+        aggregated = {}
+        
+        for price in prices_list:
+            if period_type == 'week':
+                # 使用ISO日历的年和周
+                iso_cal = price.date.isocalendar()
+                key = f"{iso_cal[0]}-W{iso_cal[1]:02d}"
+                # 记录该周的周一作为日期
+                week_start = price.date - datetime.timedelta(days=price.date.weekday())
+            else:  # month
+                key = price.date.strftime('%Y-%m')
+                week_start = price.date.replace(day=1)
+            
+            if key not in aggregated:
+                aggregated[key] = {
+                    'date': week_start,
+                    'open': price.open_price,
+                    'high': price.high_price,
+                    'low': price.low_price,
+                    'close': price.close_price,
+                    'volume': price.volume
+                }
+            else:
+                # 更新最高价和最低价
+                aggregated[key]['high'] = max(aggregated[key]['high'], price.high_price)
+                aggregated[key]['low'] = min(aggregated[key]['low'], price.low_price)
+                # 收盘价更新为最后一个交易日的收盘价
+                aggregated[key]['close'] = price.close_price
+                # 累加成交量
+                aggregated[key]['volume'] += price.volume
+        
+        # 转换为列表并按日期排序
+        result = list(aggregated.values())
+        result.sort(key=lambda x: x['date'])
+        
+        return [{
+            'id': None,
+            'date': item['date'].isoformat(),
+            'open': round(item['open'], 2),
+            'high': round(item['high'], 2),
+            'low': round(item['low'], 2),
+            'close': round(item['close'], 2),
+            'volume': item['volume']
+        } for item in result]
+    
+    aggregated_prices = aggregate_prices(prices_sorted, period)
+    return jsonify(aggregated_prices)
 
 
 @price_bp.route('/<int:stock_id>/prices', methods=['POST'])
@@ -217,13 +278,14 @@ def fetch_history_prices(stock_id):
 
 @price_bp.route('/<int:stock_id>/indicators', methods=['GET'])
 def get_indicators(stock_id):
-    """计算并返回股票的技术指标（数组格式适配图表）"""
+    """计算并返回股票的技术指标（数组格式适配图表，支持日K/周K/月K）"""
     stock = Stock.query.get_or_404(stock_id)
     
     # 获取参数，与价格数据接口保持一致
     days = request.args.get('days', type=int)
     start_date = request.args.get('start_date')
     end_date = request.args.get('end_date')
+    period = request.args.get('period', 'day')  # day/week/month
     
     # 构建查询 - 与get_stock_prices完全一致的过滤条件
     query = StockPrice.query.filter_by(stock_id=stock_id)
@@ -246,21 +308,78 @@ def get_indicators(stock_id):
     # 按时间正序排列（用于计算）
     all_prices_sorted = sorted(all_prices, key=lambda p: p.date)
     
+    # 如果是周K或月K，先进行数据聚合
+    if period != 'day':
+        def aggregate_for_indicators(prices_list, period_type):
+            """为指标计算聚合数据"""
+            if not prices_list:
+                return []
+            
+            aggregated = {}
+            
+            for price in prices_list:
+                if period_type == 'week':
+                    iso_cal = price.date.isocalendar()
+                    key = f"{iso_cal[0]}-W{iso_cal[1]:02d}"
+                    week_start = price.date - datetime.timedelta(days=price.date.weekday())
+                else:  # month
+                    key = price.date.strftime('%Y-%m')
+                    week_start = price.date.replace(day=1)
+                
+                if key not in aggregated:
+                    aggregated[key] = {
+                        'date': week_start,
+                        'open': price.open_price,
+                        'high': price.high_price,
+                        'low': price.low_price,
+                        'close': price.close_price,
+                        'volume': price.volume
+                    }
+                else:
+                    aggregated[key]['high'] = max(aggregated[key]['high'], price.high_price)
+                    aggregated[key]['low'] = min(aggregated[key]['low'], price.low_price)
+                    aggregated[key]['close'] = price.close_price
+                    aggregated[key]['volume'] += price.volume
+            
+            result = list(aggregated.values())
+            result.sort(key=lambda x: x['date'])
+            return result
+        
+        all_prices_sorted = aggregate_for_indicators(all_prices_sorted, period)
+    
     # 确定最终要显示的日期范围（与get_stock_prices返回的一致）
     if days:
         # get_stock_prices返回的是最近N天的数据（DESC取前N条）
         # 我们需要找出这N天对应的数据
         display_prices = sorted(all_prices, key=lambda p: p.date, reverse=True)[:days]
-        display_prices = sorted(display_prices, key=lambda p: p.date)  # 转为ASC
-        # 转换为ISO格式字符串以匹配前端
-        display_dates = set(p.date.isoformat() for p in display_prices)
-        print(f'🔍 get_indicators debug: all_prices={len(all_prices)}, display_prices={len(display_prices)}, days={days}')
+        
+        # 如果是周K/月K，也需要聚合显示数据
+        if period != 'day':
+            display_prices = aggregate_for_indicators(display_prices, period)
+        else:
+            display_prices = sorted(display_prices, key=lambda p: p.date)  # 转为ASC
+        
+        # 转换为ISO格式字符串以匹配前端（兼容StockPrice对象和字典）
+        def get_date_str(p):
+            if isinstance(p, dict):
+                return p['date'].isoformat() if isinstance(p['date'], datetime.date) else p['date']
+            else:  # StockPrice object
+                return p.date.isoformat()
+        
+        display_dates = set(get_date_str(p) for p in display_prices)
+        print(f'🔍 get_indicators debug: period={period}, all_prices={len(all_prices_sorted)}, display_prices={len(display_prices)}, days={days}')
         print(f'   display_dates sample: {list(display_dates)[:5]}')
     else:
-        display_dates = set(p.date.isoformat() for p in all_prices_sorted)
+        def get_date_str(p):
+            if isinstance(p, dict):
+                return p['date'].isoformat() if isinstance(p['date'], datetime.date) else p['date']
+            else:  # StockPrice object
+                return p.date.isoformat()
+        
+        display_dates = set(get_date_str(p) for p in all_prices_sorted)
     
-    closes = [p.close_price for p in all_prices_sorted]
-    all_dates = [p.date.isoformat() for p in all_prices_sorted]
+    closes = [p['close'] if isinstance(p, dict) else p.close_price for p in all_prices_sorted]
+    all_dates = [p['date'].isoformat() if isinstance(p, dict) and isinstance(p['date'], datetime.date) else (p['date'] if isinstance(p, dict) else p.date.isoformat()) for p in all_prices_sorted]
     
     # 计算移动平均线数组
     def calc_ma_array(data, period):
@@ -421,8 +540,8 @@ def get_indicators(stock_id):
     full_macd = calc_macd_array(closes)
     
     # 提取高低价用于KDJ
-    highs = [p.high_price for p in all_prices_sorted]
-    lows = [p.low_price for p in all_prices_sorted]
+    highs = [p['high'] if isinstance(p, dict) else p.high_price for p in all_prices_sorted]
+    lows = [p['low'] if isinstance(p, dict) else p.low_price for p in all_prices_sorted]
     full_kdj = calc_kdj_array(highs, lows, closes)
     
     # BOLL布林带
@@ -433,7 +552,7 @@ def get_indicators(stock_id):
     full_ema26 = calc_ema_array(closes, 26)
     
     # 成交量均线
-    volumes = [p.volume for p in all_prices_sorted]
+    volumes = [p['volume'] if isinstance(p, dict) else p.volume for p in all_prices_sorted]
     full_vol_ma5 = calc_ma_array(volumes, 5)
     full_vol_ma10 = calc_ma_array(volumes, 10)
     

@@ -50,14 +50,11 @@ export default function DataEntryPage({ stocks }) {
     const currentIds = filteredStocks.map(s => Number(s.id))
     if (currentIds.length === 0) return
 
-    // 检查当前列表是否已全部选中
     const allSelected = currentIds.every(id => selectedStocks.includes(id))
     
     if (allSelected) {
-      // 取消全选：移除当前列表中的股票
       setSelectedStocks(prev => prev.filter(id => !currentIds.includes(id)))
     } else {
-      // 全选：将当前列表追加到已选列表（去重）
       setSelectedStocks(prev => {
         const existing = new Set(prev)
         currentIds.forEach(id => existing.add(id))
@@ -88,7 +85,6 @@ export default function DataEntryPage({ stocks }) {
     setFetchResult(null)
     
     try {
-      // 如果只选了一只股票，使用单只接口
       if (selectedStocks.length === 1) {
         const stockId = selectedStocks[0]
         const response = await axios.post(`${API_BASE}/stocks/${stockId}/prices/fetch_history`, {
@@ -105,7 +101,6 @@ export default function DataEntryPage({ stocks }) {
         
         toast.success(`成功获取 ${response.data.added} 条数据${response.data.skipped > 0 ? `，${response.data.skipped} 条已存在` : ''}`)
       } else {
-        // 多只股票使用批量接口
         const response = await axios.post(`${API_BASE}/stocks/batch_fetch_history`, {
           stock_ids: selectedStocks,
           start_date: dateRange.startDate,
@@ -142,68 +137,57 @@ export default function DataEntryPage({ stocks }) {
   
   return (
     <div className="page-content">
-      {/* 顶部说明 */}
-      <div style={{
-        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-        color: '#fff',
-        padding: '24px',
-        borderRadius: '12px',
-        marginBottom: '20px',
-        boxShadow: '0 4px 12px rgba(102, 126, 234, 0.3)'
-      }}>
-        <h2 style={{ margin: '0 0 12px 0', fontSize: '24px' }}>📊 数据录入</h2>
-        <p style={{ margin: 0, opacity: 0.9, fontSize: '14px', lineHeight: '1.6' }}>
-          从东方财富自动获取股票历史K线数据，选择股票和时间范围后一键批量下载
-        </p>
+      {/* 页面头部卡片 */}
+      <div className="dashboard-header-card">
+        <div className="header-left">
+          <div className="header-icon">📊</div>
+          <div className="header-info">
+            <h3>数据录入</h3>
+            <p>从东方财富自动获取股票历史K线数据</p>
+          </div>
+        </div>
+        <div className="header-right">
+          <div className="live-time">已选 {selectedStocks.length} 只</div>
+        </div>
       </div>
       
-      {/* 主录入卡片 */}
-      <div className="card" style={{ marginBottom: '20px' }}>
-        <h3 style={{ margin: '0 0 20px 0' }}>🎯 选择股票</h3>
-        
-        {/* 搜索框 */}
-        <input
-          type="text"
-          placeholder="🔍 搜索股票代码或名称..."
-          value={searchText}
-          onChange={(e) => setSearchText(e.target.value)}
-          style={{
-            width: '100%',
-            padding: '12px 15px',
-            border: '2px solid #e8e8e8',
-            borderRadius: '8px',
-            fontSize: '14px',
-            marginBottom: '15px',
-            transition: 'all 0.3s'
-          }}
-          onFocus={(e) => e.target.style.borderColor = '#1890ff'}
-          onBlur={(e) => e.target.style.borderColor = '#e8e8e8'}
-        />
-        
-        {/* 全选按钮 */}
-        <div style={{ marginBottom: '10px', display: 'flex', gap: '10px', alignItems: 'center' }}>
-          <button 
-            onClick={toggleSelectAll}
-            className="btn-secondary"
-            style={{ padding: '6px 16px', fontSize: '13px' }}
-          >
-            {/* 修复：只有当列表有股票且全部选中时才显示取消，否则显示全选 */}
-            {filteredStocks.length > 0 && filteredStocks.every(s => selectedStocks.includes(Number(s.id))) ? '🚫 取消全选' : '☐ 全选'}
-          </button>
-          {selectedStocks.length > 0 && (
-            <span style={{ color: '#1890ff', fontSize: '14px', fontWeight: 'bold' }}>
-              已选择 {selectedStocks.length} 只股票
-            </span>
-          )}
+      {/* 主操作区 */}
+      <div className="apple-card" style={{
+        animation: 'fadeInUp 0.5s ease 0.2s',
+        animationFillMode: 'backwards'
+      }}>
+        <div className="card-header">
+          <h3 className="card-title">🎯 选择股票</h3>
+          <div className="card-actions">
+            <button 
+              onClick={toggleSelectAll}
+              className="btn-secondary pill-btn btn-sm"
+            >
+              {filteredStocks.length > 0 && filteredStocks.every(s => selectedStocks.includes(Number(s.id))) ? '取消全选' : '全选'}
+            </button>
+          </div>
         </div>
         
-        {/* 股票列表 */}
-        <div style={{
+        {/* 搜索框 */}
+        <div className="search-input-wrapper" style={{ marginBottom: '16px' }}>
+          <span className="search-icon">🔍</span>
+          <input
+            type="text"
+            placeholder="搜索股票代码或名称..."
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
+            className="search-input"
+          />
+        </div>
+        
+        {/* 股票列表 - 网格布局 */}
+        <div className="stock-grid" style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))',
+          gap: '8px',
           maxHeight: '300px',
           overflowY: 'auto',
-          border: '2px solid #e8e8e8',
-          borderRadius: '8px',
-          padding: '10px'
+          padding: '4px'
         }}>
           {filteredStocks.length > 0 ? (
             filteredStocks.map(s => {
@@ -213,186 +197,167 @@ export default function DataEntryPage({ stocks }) {
                 <div 
                   key={s.id}
                   onClick={() => toggleStockSelection(s.id)}
+                  className={`stock-grid-item ${isSelected ? 'selected' : ''}`}
                   style={{
-                    padding: '10px 12px',
-                    marginBottom: '4px',
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                    background: isSelected ? '#e6f7ff' : '#fff',
-                    border: isSelected ? '2px solid #1890ff' : '2px solid #f0f0f0',
-                    transition: 'all 0.2s',
                     display: 'flex',
-                    alignItems: 'center',
-                    gap: '10px'
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!isSelected) {
-                      e.currentTarget.style.background = '#fafafa'
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!isSelected) {
-                      e.currentTarget.style.background = '#fff'
-                    }
-                  }}
-                >
-                  <span style={{
-                    width: '20px',
-                    height: '20px',
-                    borderRadius: '4px',
-                    border: isSelected ? '2px solid #1890ff' : '2px solid #d9d9d9',
-                    display: 'flex',
+                    flexDirection: 'column',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    fontSize: '14px',
-                    color: '#fff',
-                    background: isSelected ? '#1890ff' : 'transparent',
-                    transition: 'all 0.2s'
-                  }}>
-                    {isSelected && '✓'}
-                  </span>
-                  <span style={{ fontSize: '14px', fontWeight: '500' }}>{s.code}</span>
-                  <span style={{ fontSize: '14px', color: '#666' }}>{s.name}</span>
+                    gap: '3px',
+                    padding: '8px 6px',
+                    background: isSelected ? 'rgba(102, 126, 234, 0.08)' : 'rgba(255, 255, 255, 0.8)',
+                    border: `2px solid ${isSelected ? 'rgba(102, 126, 234, 0.4)' : 'transparent'}`,
+                    borderRadius: 'var(--radius-md)',
+                    cursor: 'pointer',
+                    transition: 'all var(--transition-base)',
+                    minHeight: '56px',
+                    position: 'relative'
+                  }}
+                >
+                  <span style={{ fontWeight: '700', color: '#667eea', fontFamily: 'monospace', fontSize: '12px', lineHeight: '1.2' }}>{s.code}</span>
+                  <span style={{ fontSize: '10px', color: '#666', lineHeight: '1.2', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name}</span>
+                  {isSelected && (
+                    <span style={{
+                      position: 'absolute',
+                      top: '4px',
+                      right: '4px',
+                      width: '16px',
+                      height: '16px',
+                      borderRadius: '50%',
+                      background: '#667eea',
+                      color: '#fff',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '10px',
+                      fontWeight: 'bold'
+                    }}>✓</span>
+                  )}
                 </div>
               )
             })
           ) : (
-            <div style={{ color: '#999', fontSize: '14px', textAlign: 'center', padding: '30px' }}>
-              未找到匹配的股票
+            <div style={{
+              gridColumn: '1 / -1',
+              textAlign: 'center',
+              padding: '40px',
+              color: '#999'
+            }}>
+              🔍 未找到匹配的股票
             </div>
           )}
         </div>
-      </div>
-      
-      {/* 时间范围选择 */}
-      <div className="card" style={{ marginBottom: '20px' }}>
-        <h3 style={{ margin: '0 0 20px 0' }}>📅 时间范围</h3>
         
-        {/* 快速选择按钮 */}
-        <div style={{ display: 'flex', gap: '8px', marginBottom: '15px', flexWrap: 'wrap' }}>
-          <button 
-            onClick={() => setQuickRange(7)}
-            className="btn-secondary"
-            style={{ padding: '6px 14px', fontSize: '13px' }}
-          >
-            最近7天
-          </button>
-          <button 
-            onClick={() => setQuickRange(30)}
-            className="btn-secondary"
-            style={{ padding: '6px 14px', fontSize: '13px' }}
-          >
-            最近30天
-          </button>
-          <button 
-            onClick={() => setQuickRange(90)}
-            className="btn-secondary"
-            style={{ padding: '6px 14px', fontSize: '13px' }}
-          >
-            最近90天
-          </button>
-          <button 
-            onClick={() => setQuickRange(180)}
-            className="btn-secondary"
-            style={{ padding: '6px 14px', fontSize: '13px' }}
-          >
-            最近180天
-          </button>
-          <button 
-            onClick={() => setQuickRange(365)}
-            className="btn-secondary"
-            style={{ padding: '6px 14px', fontSize: '13px' }}
-          >
-            最近1年
-          </button>
-        </div>
+        {/* 分隔线 */}
+        <div style={{
+          margin: '24px 0',
+          height: '1px',
+          background: 'rgba(0, 0, 0, 0.06)'
+        }}></div>
         
-        {/* 日期选择器 */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
-          <div>
-            <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#333' }}>
-              开始日期
-            </label>
-            <input
-              type="date"
-              value={dateRange.startDate}
-              onChange={(e) => setDateRange({ ...dateRange, startDate: e.target.value })}
-              style={{
-                width: '100%',
-                padding: '10px',
-                border: '2px solid #e8e8e8',
-                borderRadius: '8px',
-                fontSize: '14px'
-              }}
-            />
+        {/* 时间范围选择 */}
+        <div>
+          <h4 style={{ fontSize: '16px', fontWeight: '600', color: '#333', marginBottom: '16px' }}>📅 时间范围</h4>
+          
+          {/* 快速选择按钮 */}
+          <div style={{
+            display: 'flex',
+            gap: '8px',
+            marginBottom: '16px',
+            flexWrap: 'wrap'
+          }}>
+            {[7, 30, 90, 180, 365].map(days => (
+              <button 
+                key={days}
+                onClick={() => setQuickRange(days)}
+                className="btn-secondary pill-btn btn-sm"
+              >
+                {days >= 365 ? `${days / 365}年` : `${days}天`}
+              </button>
+            ))}
           </div>
-          <div>
-            <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#333' }}>
-              结束日期
-            </label>
-            <input
-              type="date"
-              value={dateRange.endDate}
-              onChange={(e) => setDateRange({ ...dateRange, endDate: e.target.value })}
-              style={{
-                width: '100%',
-                padding: '10px',
-                border: '2px solid #e8e8e8',
-                borderRadius: '8px',
-                fontSize: '14px'
-              }}
-            />
+          
+          {/* 日期选择器 */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: '1fr 1fr',
+            gap: '16px'
+          }}>
+            <div>
+              <label style={{ fontSize: '13px', fontWeight: '600', color: '#666', marginBottom: '8px', display: 'block' }}>开始日期</label>
+              <input
+                type="date"
+                value={dateRange.startDate}
+                onChange={(e) => setDateRange({ ...dateRange, startDate: e.target.value })}
+                className="apple-input"
+                style={{ width: '100%' }}
+              />
+            </div>
+            <div>
+              <label style={{ fontSize: '13px', fontWeight: '600', color: '#666', marginBottom: '8px', display: 'block' }}>结束日期</label>
+              <input
+                type="date"
+                value={dateRange.endDate}
+                onChange={(e) => setDateRange({ ...dateRange, endDate: e.target.value })}
+                className="apple-input"
+                style={{ width: '100%' }}
+              />
+            </div>
           </div>
         </div>
       </div>
       
       {/* 获取按钮 */}
-      <div className="card" style={{ marginBottom: '20px' }}>
+      <div className="apple-card" style={{
+        marginTop: '20px',
+        animation: 'fadeInUp 0.5s ease 0.3s',
+        animationFillMode: 'backwards'
+      }}>
         <button 
           onClick={handleFetchHistory}
-          className="btn-primary"
+          className="btn-primary pill-btn"
           disabled={fetching || selectedStocks.length === 0}
           style={{
             width: '100%',
-            padding: '16px',
+            padding: '16px 32px',
             fontSize: '16px',
-            fontWeight: 'bold',
-            opacity: fetching || selectedStocks.length === 0 ? 0.6 : 1
+            fontWeight: '600'
           }}
         >
           {fetching ? (
             <>
-              ⏳ 正在获取数据... ({progress.current}/{progress.total})
+              <span className="btn-spinner"></span>
+              正在获取数据... ({progress.current}/{progress.total})
             </>
           ) : (
             <>
-              🚀 从网络获取历史数据 ({selectedStocks.length} 只股票)
+              <span className="btn-icon">🚀</span>
+              从网络获取历史数据 ({selectedStocks.length} 只股票)
             </>
           )}
         </button>
         
         {fetching && (
           <div style={{
-            marginTop: '15px',
-            padding: '15px',
-            background: '#e6f7ff',
-            borderRadius: '8px',
-            textAlign: 'center'
+            marginTop: '16px',
+            padding: '16px',
+            background: 'rgba(102, 126, 234, 0.05)',
+            borderRadius: 'var(--radius-lg)',
+            border: '1px solid rgba(102, 126, 234, 0.2)'
           }}>
-            <div style={{ fontSize: '14px', color: '#1890ff', marginBottom: '8px' }}>
-              正在从东方财富获取数据，请稍候...
-            </div>
+            <div style={{ fontSize: '14px', color: '#667eea', marginBottom: '8px' }}>正在从东方财富获取数据，请稍候...</div>
             <div style={{
               height: '6px',
-              background: '#d9d9d9',
+              background: 'rgba(0, 0, 0, 0.06)',
               borderRadius: '3px',
               overflow: 'hidden'
             }}>
               <div style={{
                 height: '100%',
                 width: `${progress.total > 0 ? (progress.current / progress.total * 100) : 0}%`,
-                background: 'linear-gradient(90deg, #1890ff, #36cfc9)',
-                transition: 'width 0.3s'
+                background: 'linear-gradient(90deg, #667eea 0%, #764ba2 100%)',
+                borderRadius: '3px',
+                transition: 'width 0.3s ease'
               }} />
             </div>
           </div>
@@ -401,51 +366,56 @@ export default function DataEntryPage({ stocks }) {
       
       {/* 获取结果 */}
       {fetchResult && fetchResult.success && (
-        <div className="card" style={{ marginBottom: '20px' }}>
-          <h3 style={{ margin: '0 0 20px 0', color: '#52c41a' }}>✅ 获取结果</h3>
+        <div className="apple-card" style={{
+          marginTop: '20px',
+          animation: 'fadeInUp 0.5s ease'
+        }}>
+          <div className="card-header">
+            <h3 className="card-title">✅ 获取结果</h3>
+          </div>
           
           <div style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
-            gap: '15px',
-            marginBottom: '20px'
+            gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
+            gap: '16px',
+            marginBottom: fetchResult.stockResults ? '24px' : '0'
           }}>
             <div style={{
-              padding: '15px',
-              background: '#f6ffed',
-              borderRadius: '8px',
+              padding: '20px',
+              background: 'linear-gradient(135deg, #f6ffed 0%, #d9f7be 100%)',
+              borderRadius: 'var(--radius-lg)',
               textAlign: 'center',
               border: '1px solid #b7eb8f'
             }}>
-              <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#52c41a' }}>
+              <div style={{ fontSize: '32px', fontWeight: '700', color: '#52c41a', lineHeight: '1', marginBottom: '8px' }}>
                 {fetchResult.added}
               </div>
-              <div style={{ fontSize: '14px', color: '#666', marginTop: '5px' }}>新增数据</div>
+              <div style={{ fontSize: '13px', color: '#666', fontWeight: '500' }}>新增数据</div>
             </div>
             <div style={{
-              padding: '15px',
-              background: '#fff7e6',
-              borderRadius: '8px',
+              padding: '20px',
+              background: 'linear-gradient(135deg, #fff7e6 0%, #ffe7ba 100%)',
+              borderRadius: 'var(--radius-lg)',
               textAlign: 'center',
               border: '1px solid #ffd591'
             }}>
-              <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#fa8c16' }}>
+              <div style={{ fontSize: '32px', fontWeight: '700', color: '#fa8c16', lineHeight: '1', marginBottom: '8px' }}>
                 {fetchResult.skipped}
               </div>
-              <div style={{ fontSize: '14px', color: '#666', marginTop: '5px' }}>已存在</div>
+              <div style={{ fontSize: '13px', color: '#666', fontWeight: '500' }}>已存在</div>
             </div>
             {fetchResult.errors > 0 && (
               <div style={{
-                padding: '15px',
-                background: '#fff1f0',
-                borderRadius: '8px',
+                padding: '20px',
+                background: 'linear-gradient(135deg, #fff1f0 0%, #ffccc7 100%)',
+                borderRadius: 'var(--radius-lg)',
                 textAlign: 'center',
                 border: '1px solid #ffa39e'
               }}>
-                <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#ff4d4f' }}>
+                <div style={{ fontSize: '32px', fontWeight: '700', color: '#f5222d', lineHeight: '1', marginBottom: '8px' }}>
                   {fetchResult.errors}
                 </div>
-                <div style={{ fontSize: '14px', color: '#666', marginTop: '5px' }}>失败</div>
+                <div style={{ fontSize: '13px', color: '#666', fontWeight: '500' }}>失败</div>
               </div>
             )}
           </div>
@@ -453,36 +423,36 @@ export default function DataEntryPage({ stocks }) {
           {/* 每只股票的详细结果 */}
           {fetchResult.stockResults && fetchResult.stockResults.length > 0 && (
             <div>
-              <h4 style={{ margin: '0 0 15px 0', color: '#333' }}>📊 各股票获取详情</h4>
-              <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
+              <h4 style={{ fontSize: '15px', fontWeight: '600', color: '#333', marginBottom: '16px' }}>📊 各股票获取详情</h4>
+              <div style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '8px',
+                maxHeight: '300px',
+                overflowY: 'auto'
+              }}>
                 {fetchResult.stockResults.map((result, index) => (
                   <div key={index} style={{
-                    padding: '12px',
-                    marginBottom: '8px',
-                    background: result.success ? '#f6ffed' : '#fff1f0',
-                    border: `1px solid ${result.success ? '#b7eb8f' : '#ffa39e'}`,
-                    borderRadius: '6px',
                     display: 'flex',
                     justifyContent: 'space-between',
-                    alignItems: 'center'
+                    alignItems: 'center',
+                    padding: '12px 16px',
+                    background: result.success ? 'rgba(82, 196, 26, 0.05)' : 'rgba(245, 34, 45, 0.05)',
+                    border: `1px solid ${result.success ? '#b7eb8f' : '#ffa39e'}`,
+                    borderRadius: 'var(--radius-md)',
+                    fontSize: '13px'
                   }}>
                     <div>
-                      <div style={{ fontWeight: 'bold', marginBottom: '4px' }}>
+                      <div style={{ fontWeight: '600', color: '#333', marginBottom: '4px' }}>
                         {result.stock_code} - {result.stock_name || '未知'}
                       </div>
-                      {result.success ? (
-                        <div style={{ fontSize: '13px', color: '#52c41a' }}>
-                          成功: 新增 {result.added} 条，跳过 {result.skipped} 条
-                        </div>
-                      ) : (
-                        <div style={{ fontSize: '13px', color: '#ff4d4f' }}>
-                          失败: {result.message}
-                        </div>
-                      )}
+                      <div style={{ color: result.success ? '#52c41a' : '#f5222d' }}>
+                        {result.success 
+                          ? `成功: 新增 ${result.added} 条，跳过 ${result.skipped} 条`
+                          : `失败: ${result.message}`}
+                      </div>
                     </div>
-                    <div style={{ fontSize: '20px' }}>
-                      {result.success ? '✅' : '❌'}
-                    </div>
+                    <span style={{ fontSize: '20px' }}>{result.success ? '✅' : '❌'}</span>
                   </div>
                 ))}
               </div>
@@ -492,13 +462,24 @@ export default function DataEntryPage({ stocks }) {
       )}
       
       {/* 使用提示 */}
-      <div className="card">
-        <h3 style={{ margin: '0 0 15px 0' }}>💡 使用说明</h3>
-        <div style={{ fontSize: '14px', lineHeight: '1.8', color: '#666' }}>
-          <p style={{ margin: '0 0 10px 0' }}>1. 在上方搜索并选择需要获取数据的股票（支持多选）</p>
-          <p style={{ margin: '0 0 10px 0' }}>2. 选择时间范围，可以使用快捷按钮或手动选择日期</p>
-          <p style={{ margin: '0 0 10px 0' }}>3. 点击"从网络获取历史数据"按钮，系统将自动从东方财富下载数据</p>
-          <p style={{ margin: '0' }}>4. 数据会自动去重，已存在的数据不会重复添加</p>
+      <div className="apple-card" style={{
+        marginTop: '20px',
+        animation: 'fadeInUp 0.5s ease 0.4s',
+        animationFillMode: 'backwards'
+      }}>
+        <h3 className="card-title" style={{ marginBottom: '16px' }}>💡 使用说明</h3>
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '12px',
+          fontSize: '14px',
+          color: '#666',
+          lineHeight: '1.6'
+        }}>
+          <p style={{ margin: 0 }}>1. 在上方搜索并选择需要获取数据的股票（支持多选）</p>
+          <p style={{ margin: 0 }}>2. 选择时间范围，可以使用快捷按钮或手动选择日期</p>
+          <p style={{ margin: 0 }}>3. 点击"从网络获取历史数据"按钮，系统将自动从东方财富下载数据</p>
+          <p style={{ margin: 0 }}>4. 数据会自动去重，已存在的数据不会重复添加</p>
         </div>
       </div>
     </div>
