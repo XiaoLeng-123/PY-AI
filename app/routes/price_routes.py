@@ -327,6 +327,91 @@ def get_indicators(stock_id):
             'histogram': prefix_none + histogram
         }
     
+    # 计算KDJ数组
+    def calc_kdj_array(highs, lows, closes, n=9, m1=3, m2=3):
+        rsv_list = []
+        k_values = []
+        d_values = []
+        j_values = []
+        
+        for i in range(len(closes)):
+            if i < n - 1:
+                rsv_list.append(None)
+                k_values.append(None)
+                d_values.append(None)
+                j_values.append(None)
+            else:
+                llv = min(lows[i-n+1:i+1])
+                hhv = max(highs[i-n+1:i+1])
+                if hhv == llv:
+                    rsv = 50
+                else:
+                    rsv = (closes[i] - llv) / (hhv - llv) * 100
+                rsv_list.append(rsv)
+                
+                if i == n - 1:
+                    k = 50
+                    d = 50
+                else:
+                    prev_k = k_values[i-1] if k_values[i-1] is not None else 50
+                    prev_d = d_values[i-1] if d_values[i-1] is not None else 50
+                    k = (m1 - 1) / m1 * prev_k + 1 / m1 * rsv
+                    d = (m2 - 1) / m2 * prev_d + 1 / m2 * k
+                
+                j = 3 * k - 2 * d
+                k_values.append(round(k, 2))
+                d_values.append(round(d, 2))
+                j_values.append(round(j, 2))
+        
+        return {
+            'k': k_values,
+            'd': d_values,
+            'j': j_values
+        }
+    
+    # 计算BOLL布林带
+    def calc_boll_array(data, period=20, std_dev=2):
+        middle = []
+        upper = []
+        lower = []
+        
+        for i in range(len(data)):
+            if i < period - 1:
+                middle.append(None)
+                upper.append(None)
+                lower.append(None)
+            else:
+                window = data[i-period+1:i+1]
+                ma = sum(window) / period
+                variance = sum([(x - ma) ** 2 for x in window]) / period
+                std = variance ** 0.5
+                
+                middle.append(round(ma, 2))
+                upper.append(round(ma + std_dev * std, 2))
+                lower.append(round(ma - std_dev * std, 2))
+        
+        return {
+            'middle': middle,
+            'upper': upper,
+            'lower': lower
+        }
+    
+    # 计算EMA数组
+    def calc_ema_array(data, period):
+        result = []
+        multiplier = 2 / (period + 1)
+        
+        for i in range(len(data)):
+            if i < period - 1:
+                result.append(None)
+            elif i == period - 1:
+                result.append(round(sum(data[:period]) / period, 2))
+            else:
+                ema_val = (data[i] - result[-1]) * multiplier + result[-1]
+                result.append(round(ema_val, 2))
+        
+        return result
+    
     # 计算所有指标（基于完整数据集）
     full_ma5 = calc_ma_array(closes, 5)
     full_ma10 = calc_ma_array(closes, 10)
@@ -334,6 +419,23 @@ def get_indicators(stock_id):
     full_ma60 = calc_ma_array(closes, 60)
     full_rsi = calc_rsi_array(closes)
     full_macd = calc_macd_array(closes)
+    
+    # 提取高低价用于KDJ
+    highs = [p.high_price for p in all_prices_sorted]
+    lows = [p.low_price for p in all_prices_sorted]
+    full_kdj = calc_kdj_array(highs, lows, closes)
+    
+    # BOLL布林带
+    full_boll = calc_boll_array(closes)
+    
+    # EMA指数移动平均
+    full_ema12 = calc_ema_array(closes, 12)
+    full_ema26 = calc_ema_array(closes, 26)
+    
+    # 成交量均线
+    volumes = [p.volume for p in all_prices_sorted]
+    full_vol_ma5 = calc_ma_array(volumes, 5)
+    full_vol_ma10 = calc_ma_array(volumes, 10)
     
     # 只提取display_dates对应的指标值
     ma5 = []
@@ -344,6 +446,16 @@ def get_indicators(stock_id):
     macd_line = []
     macd_signal = []
     macd_hist = []
+    kdj_k = []
+    kdj_d = []
+    kdj_j = []
+    boll_upper = []
+    boll_middle = []
+    boll_lower = []
+    ema12 = []
+    ema26 = []
+    vol_ma5 = []
+    vol_ma10 = []
     
     for i, date in enumerate(all_dates):
         if date in display_dates:
@@ -355,6 +467,16 @@ def get_indicators(stock_id):
             macd_line.append(full_macd['macd_line'][i])
             macd_signal.append(full_macd['signal_line'][i])
             macd_hist.append(full_macd['histogram'][i])
+            kdj_k.append(full_kdj['k'][i])
+            kdj_d.append(full_kdj['d'][i])
+            kdj_j.append(full_kdj['j'][i])
+            boll_upper.append(full_boll['upper'][i])
+            boll_middle.append(full_boll['middle'][i])
+            boll_lower.append(full_boll['lower'][i])
+            ema12.append(full_ema12[i])
+            ema26.append(full_ema26[i])
+            vol_ma5.append(full_vol_ma5[i])
+            vol_ma10.append(full_vol_ma10[i])
     
     indicators = {
         'ma5': ma5,
@@ -366,7 +488,21 @@ def get_indicators(stock_id):
             'macd_line': macd_line,
             'signal_line': macd_signal,
             'histogram': macd_hist
-        }
+        },
+        'kdj': {
+            'k': kdj_k,
+            'd': kdj_d,
+            'j': kdj_j
+        },
+        'boll': {
+            'upper': boll_upper,
+            'middle': boll_middle,
+            'lower': boll_lower
+        },
+        'ema12': ema12,
+        'ema26': ema26,
+        'vol_ma5': vol_ma5,
+        'vol_ma10': vol_ma10
     }
     
     print(f'📊 Indicators: total={len(all_prices_sorted)}, display={len(ma5)}, days={days}')

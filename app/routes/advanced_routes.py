@@ -391,3 +391,378 @@ def get_trading_signals():
             'risk_reward_ratio': round((take_profit - latest_price) / (latest_price - stop_loss), 2) if latest_price > stop_loss else 0
         }
     })
+
+# ==================== 策略回测 ====================
+
+@advanced_bp.route('/backtest', methods=['POST'])
+def run_backtest():
+    """运行策略回测"""
+    data = request.json
+    stock_id = data.get('stock_id')
+    strategy = data.get('strategy', 'ma_cross')
+    start_date = data.get('start_date')
+    end_date = data.get('end_date')
+    
+    if not stock_id:
+        return jsonify({'error': '请提供股票ID'}), 400
+    
+    # 获取价格数据
+    query = StockPrice.query.filter_by(stock_id=stock_id)
+    if start_date:
+        query = query.filter(StockPrice.date >= datetime.strptime(start_date, '%Y-%m-%d').date())
+    if end_date:
+        query = query.filter(StockPrice.date <= datetime.strptime(end_date, '%Y-%m-%d').date())
+    
+    prices = query.order_by(StockPrice.date).all()
+    
+    if len(prices) < 30:
+        return jsonify({'error': '数据不足，需要至少30天数据'}), 400
+    
+    # 初始化回测变量
+    trades = []
+    position = 0  # 持仓数量
+    cash = 100000  # 初始资金10万
+    initial_capital = cash
+    
+    closes = [p.close_price for p in prices]
+    dates = [p.date.isoformat() for p in prices]
+    
+    # 计算技术指标
+    def calc_ma(data, period):
+        result = []
+        for i in range(len(data)):
+            if i < period - 1:
+                result.append(None)
+            else:
+                result.append(sum(data[i-period+1:i+1]) / period)
+        return result
+    
+    ma5 = calc_ma(closes, 5)
+    ma20 = calc_ma(closes, 20)
+    
+    # 执行策略
+    for i in range(1, len(prices)):
+        signal = None
+        
+        if strategy == 'ma_cross':
+            # 均线金叉/死叉
+            if ma5[i] and ma5[i-1] and ma20[i] and ma20[i-1]:
+                if ma5[i-1] <= ma20[i-1] and ma5[i] > ma20[i]:
+                    signal = 'buy'
+                elif ma5[i-1] >= ma20[i-1] and ma5[i] < ma20[i]:
+                    signal = 'sell'
+        
+        elif strategy == 'macd':
+            # MACD金叉/死叉（简化版）
+            if i >= 26:
+                ema12 = sum(closes[max(0,i-11):i+1]) / min(12, i+1)
+                ema26 = sum(closes[max(0,i-25):i+1]) / min(26, i+1)
+                macd_line = ema12 - ema26
+                
+                if i >= 35:
+                    prev_ema12 = sum(closes[max(0,i-12):i]) / min(12, i)
+                    prev_ema26 = sum(closes[max(0,i-26):i]) / min(26, i)
+                    prev_macd = prev_ema12 - prev_ema26
+                    
+                    if prev_macd <= 0 and macd_line > 0:
+                        signal = 'buy'
+                    elif prev_macd >= 0 and macd_line < 0:
+                        signal = 'sell'
+        
+        elif strategy == 'rsi':
+            # RSI超买超卖
+            if i >= 14:
+                gains = []
+                losses = []
+                for j in range(i-13, i+1):
+                    diff = closes[j] - closes[j-1]
+                    gains.append(max(0, diff))
+                    losses.append(max(0, -diff))
+                
+                avg_gain = sum(gains) / 14
+                avg_loss = sum(losses) / 14
+                
+                if avg_loss == 0:
+                    rsi = 100
+                else:
+                    rs = avg_gain / avg_loss
+                    rsi = 100 - (100 / (1 + rs))
+                
+                if rsi < 30:
+                    signal = 'buy'
+                elif rsi > 70:
+                    signal = 'sell'
+        
+        # 执行交易
+        if signal == 'buy' and position == 0 and cash > 0:
+            # 买入
+            quantity = int(cash / closes[i])
+            if quantity > 0:
+                cost = quantity * closes[i]
+                cash -= cost
+                position = quantity
+                trades.append({
+                    'date': dates[i],
+                    'type': 'buy',
+                    'price': closes[i],
+                    'quantity': quantity,
+                    'amount': round(cost, 2),
+                    'profit': None
+                })
+        
+        elif signal == 'sell' and position > 0:
+            # 卖出
+            revenue = position * closes[i]
+            profit = revenue - (trades[-1]['amount'] if trades else 0)
+            cash += revenue
+            
+            trades.append({
+                'date': dates[i],
+                'type': 'sell',
+                'price': closes[i],
+                'quantity': position,
+                'amount': round(revenue, 2),
+                'profit': round(profit, 2)
+            })
+            position = 0
+    
+    # 计算回测结果
+    final_capital = cash + (position * closes[-1] if position > 0 else 0)
+    total_return = ((final_capital - initial_capital) / initial_capital) * 100
+    
+    # 计算年化收益
+    days = (prices[-1].date - prices[0].date).days
+    years = days / 365.25 if days > 0 else 1
+    annualized_return = ((final_capital / initial_capital) ** (1 / years) - 1) * 100 if years > 0 else 0
+    
+    # 计算胜率和盈亏比
+    sell_trades = [t for t in trades if t['type'] == 'sell']
+    win_trades = [t for t in sell_trades if t['profit'] > 0]
+    loss_trades = [t for t in sell_trades if t['profit'] <= 0]
+    
+    win_count = len(win_trades)
+    loss_count = len(loss_trades)
+    win_rate = (win_count / len(sell_trades) * 100) if sell_trades else 0
+    
+    # 计算最大回撤
+    peak = initial_capital
+    max_drawdown = 0
+    capital_curve = [initial_capital]
+    
+    for trade in trades:
+        if trade['type'] == 'buy':
+            capital_curve.append(capital_curve[-1] - trade['amount'])
+        else:
+            capital_curve.append(capital_curve[-1] + trade['amount'])
+        
+        if capital_curve[-1] > peak:
+            peak = capital_curve[-1]
+        
+        drawdown = (peak - capital_curve[-1]) / peak * 100
+        if drawdown > max_drawdown:
+            max_drawdown = drawdown
+    
+    # 计算夏普比率（简化版）
+    if len(sell_trades) > 1:
+        profits = [t['profit'] for t in sell_trades]
+        avg_profit = sum(profits) / len(profits)
+        std_profit = (sum([(p - avg_profit) ** 2 for p in profits]) / len(profits)) ** 0.5
+        sharpe_ratio = (avg_profit / std_profit) if std_profit > 0 else 0
+    else:
+        sharpe_ratio = 0
+    
+    # 生成资金曲线数据
+    equity_curve = []
+    peak = initial_capital  # 初始化峰值
+    for i, price in enumerate(prices):
+        # 计算当前持仓市值
+        position_value = position * price.close_price if position > 0 else 0
+        total_value = cash + position_value
+        
+        # 先计算回撤（使用当前峰值）
+        drawdown = ((peak - total_value) / peak * 100) if peak > 0 else 0
+        
+        equity_curve.append({
+            'date': dates[i],
+            'equity': round(total_value, 2),
+            'drawdown': round(drawdown, 2)
+        })
+        
+        # 更新峰值
+        if total_value > peak:
+            peak = total_value
+    
+    return jsonify({
+        'total_return': round(total_return, 2),
+        'annualized_return': round(annualized_return, 2),
+        'win_rate': round(win_rate, 1),
+        'win_count': win_count,
+        'loss_count': loss_count,
+        'max_drawdown': round(max_drawdown, 2),
+        'sharpe_ratio': round(sharpe_ratio, 2),
+        'trade_count': len(trades),
+        'final_capital': round(final_capital, 2),
+        'trades': trades,
+        'equity_curve': equity_curve
+    })
+
+@advanced_bp.route('/backtest/optimize', methods=['POST'])
+def optimize_strategy():
+    """策略参数优化"""
+    data = request.json
+    stock_id = data.get('stock_id')
+    strategy = data.get('strategy', 'ma_cross')
+    start_date = data.get('start_date')
+    end_date = data.get('end_date')
+    
+    if not stock_id:
+        return jsonify({'error': '请提供股票ID'}), 400
+    
+    # 获取价格数据
+    query = StockPrice.query.filter_by(stock_id=stock_id)
+    if start_date:
+        query = query.filter(StockPrice.date >= datetime.strptime(start_date, '%Y-%m-%d').date())
+    if end_date:
+        query = query.filter(StockPrice.date <= datetime.strptime(end_date, '%Y-%m-%d').date())
+    
+    prices = query.order_by(StockPrice.date).all()
+    
+    if len(prices) < 60:
+        return jsonify({'error': '数据不足，需要至少60天数据'}), 400
+    
+    closes = [p.close_price for p in prices]
+    dates = [p.date.isoformat() for p in prices]
+    
+    results = []
+    
+    if strategy == 'ma_cross':
+        # 优化均线周期组合
+        for short_period in [5, 10, 15]:
+            for long_period in [20, 30, 60]:
+                if short_period >= long_period:
+                    continue
+                
+                # 计算均线
+                def calc_ma(data, period):
+                    result = []
+                    for i in range(len(data)):
+                        if i < period - 1:
+                            result.append(None)
+                        else:
+                            result.append(sum(data[i-period+1:i+1]) / period)
+                    return result
+                
+                ma_short = calc_ma(closes, short_period)
+                ma_long = calc_ma(closes, long_period)
+                
+                # 执行回测
+                trades_count = 0
+                wins = 0
+                losses = 0
+                total_profit = 0
+                position = 0
+                cash = 100000
+                
+                for i in range(1, len(prices)):
+                    if ma_short[i] and ma_short[i-1] and ma_long[i] and ma_long[i-1]:
+                        if ma_short[i-1] <= ma_long[i-1] and ma_short[i] > ma_long[i] and position == 0:
+                            # 买入
+                            quantity = int(cash / closes[i])
+                            if quantity > 0:
+                                cash -= quantity * closes[i]
+                                position = quantity
+                        elif ma_short[i-1] >= ma_long[i-1] and ma_short[i] < ma_long[i] and position > 0:
+                            # 卖出
+                            revenue = position * closes[i]
+                            profit = revenue - (cash + position * closes[i-1] - 100000)
+                            cash += revenue
+                            total_profit += profit
+                            if profit > 0:
+                                wins += 1
+                            else:
+                                losses += 1
+                            trades_count += 1
+                            position = 0
+                
+                final_capital = cash + (position * closes[-1] if position > 0 else 0)
+                total_return = ((final_capital - 100000) / 100000) * 100
+                win_rate = (wins / trades_count * 100) if trades_count > 0 else 0
+                
+                results.append({
+                    'params': f'MA{short_period}/MA{long_period}',
+                    'short_period': short_period,
+                    'long_period': long_period,
+                    'total_return': round(total_return, 2),
+                    'win_rate': round(win_rate, 1),
+                    'trade_count': trades_count,
+                    'final_capital': round(final_capital, 2)
+                })
+    
+    elif strategy == 'rsi':
+        # 优化RSI阈值
+        for oversold in [20, 25, 30]:
+            for overbought in [70, 75, 80]:
+                if oversold >= overbought:
+                    continue
+                
+                # 简化的RSI回测
+                trades_count = 0
+                wins = 0
+                losses = 0
+                position = 0
+                cash = 100000
+                
+                for i in range(14, len(prices)):
+                    gains = []
+                    losses_list = []
+                    for j in range(i-13, i+1):
+                        diff = closes[j] - closes[j-1]
+                        gains.append(max(0, diff))
+                        losses_list.append(max(0, -diff))
+                    
+                    avg_gain = sum(gains) / 14
+                    avg_loss = sum(losses_list) / 14
+                    
+                    if avg_loss == 0:
+                        rsi = 100
+                    else:
+                        rs = avg_gain / avg_loss
+                        rsi = 100 - (100 / (1 + rs))
+                    
+                    if rsi < oversold and position == 0:
+                        quantity = int(cash / closes[i])
+                        if quantity > 0:
+                            cash -= quantity * closes[i]
+                            position = quantity
+                    elif rsi > overbought and position > 0:
+                        revenue = position * closes[i]
+                        profit = revenue - (cash + position * closes[i-1] - 100000)
+                        cash += revenue
+                        if profit > 0:
+                            wins += 1
+                        else:
+                            losses += 1
+                        trades_count += 1
+                        position = 0
+                
+                final_capital = cash + (position * closes[-1] if position > 0 else 0)
+                total_return = ((final_capital - 100000) / 100000) * 100
+                win_rate = (wins / trades_count * 100) if trades_count > 0 else 0
+                
+                results.append({
+                    'params': f'RSI<{oversold}/>{overbought}',
+                    'oversold': oversold,
+                    'overbought': overbought,
+                    'total_return': round(total_return, 2),
+                    'win_rate': round(win_rate, 1),
+                    'trade_count': trades_count,
+                    'final_capital': round(final_capital, 2)
+                })
+    
+    # 按收益率排序
+    results.sort(key=lambda x: x['total_return'], reverse=True)
+    
+    return jsonify({
+        'best_params': results[0] if results else None,
+        'all_results': results[:20]  # 返回前20个结果
+    })

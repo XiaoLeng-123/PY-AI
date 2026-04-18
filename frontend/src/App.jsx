@@ -18,7 +18,8 @@ import {
   AlertPage,
   SectorAnalysisPage,
   MoneyFlowPage,
-  TradingSignalsPage
+  TradingSignalsPage,
+  BacktestPage
 } from './pages'
 import { setCache, getCache } from './utils/cache'
 import { getCurrentTheme, applyTheme } from './utils/themes'
@@ -100,6 +101,8 @@ export default function App() {
         return <MoneyFlowPage {...pageProps} />
       case 'signals':
         return <TradingSignalsPage {...pageProps} />
+      case 'backtest':
+        return <BacktestPage {...pageProps} />
       case 'portfolio':
         return <PortfolioPage {...pageProps} />
       case 'compare':

@@ -782,14 +782,18 @@ def search_stock_by_name(name):
 
 
 def get_realtime_price(code):
-    """获取股票实时行情（东方财富API）"""
+    """获取股票实时行情（东方财富API）
+    返回: price, high, low, open, close, change, volume, amount, turnover, volume_ratio, pe, amplitude
+    """
     try:
         url = "https://push2.eastmoney.com/api/qt/stock/get"
         secid = f'1.{code}' if code.startswith('6') else f'0.{code}'
         params = {
             'secid': secid,
             'ut': 'fa5fd1943c7b386f172d6893dbfba10b',
-            'fields': 'f43,f44,f45,f46,f47,f170'
+            # f43=最新价 f44=最高 f45=最低 f46=开盘 f47=收盘 f170=涨跌幅
+            # f6=成交量 f5=成交额 f8=换手率 f10=量比 f9=市盈率 f7=振幅 f48=总市值 f49=流通市值 f18=昨收
+            'fields': 'f43,f44,f45,f46,f47,f170,f6,f5,f8,f10,f9,f7,f48,f49,f18'
         }
         
         headers = {
@@ -803,13 +807,28 @@ def get_realtime_price(code):
             if data.get('data'):
                 d = data['data']
                 if d.get('f43'):
+                    # 计算涨跌额
+                    prev_close = d.get('f18', 0) / 100 if d.get('f18') else 0
+                    current_price = d.get('f43') / 100
+                    change_amount = current_price - prev_close if prev_close else 0
+                    
                     return {
-                        'price': d.get('f43') / 100,  # 转换为元
+                        'price': current_price,
                         'high': d.get('f44') / 100 if d.get('f44') else None,
                         'low': d.get('f45') / 100 if d.get('f45') else None,
                         'open': d.get('f46') / 100 if d.get('f46') else None,
                         'close': d.get('f47') / 100 if d.get('f47') else None,
-                        'change': d.get('f170')  # 涨跌幅已经是百分比
+                        'prev_close': prev_close,
+                        'change': d.get('f170'),  # 涨跌幅(百分比)
+                        'change_amount': round(change_amount, 2),  # 涨跌额
+                        'volume': d.get('f6') / 10000 if d.get('f6') else 0,  # 成交量(万手)
+                        'amount': d.get('f5') / 10000 if d.get('f5') else 0,  # 成交额(万元)
+                        'turnover': d.get('f8'),  # 换手率(%)
+                        'volume_ratio': d.get('f10'),  # 量比
+                        'pe': d.get('f9'),  # 市盈率(动)
+                        'amplitude': d.get('f7'),  # 振幅(%)
+                        'total_market_value': d.get('f48') / 100000000 if d.get('f48') else 0,  # 总市值(亿)
+                        'circulating_value': d.get('f49') / 100000000 if d.get('f49') else 0,  # 流通市值(亿)
                     }
         return None
     except Exception as e:

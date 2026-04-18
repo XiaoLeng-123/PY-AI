@@ -84,6 +84,13 @@ def register_websocket_events(socketio):
     """注册WebSocket事件"""
     from flask_socketio import emit
     from flask import request
+    from app.models.models import Stock
+    from app.services.financial_api import get_realtime_price
+    import threading
+    import time
+    
+    # 存储订阅关系: {stock_id: [sid1, sid2, ...]}
+    subscriptions = {}
     
     @socketio.on('connect')
     def handle_connect():
@@ -93,12 +100,56 @@ def register_websocket_events(socketio):
     @socketio.on('disconnect')
     def handle_disconnect():
         print(f'客户端断开: {request.sid}')
+        # 清理订阅关系
+        for stock_id in list(subscriptions.keys()):
+            if request.sid in subscriptions[stock_id]:
+                subscriptions[stock_id].remove(request.sid)
+                if not subscriptions[stock_id]:
+                    del subscriptions[stock_id]
     
     @socketio.on('subscribe_stock')
     def handle_subscribe(data):
         stock_id = data.get('stock_id')
         if stock_id:
             print(f'客户端 {request.sid} 订阅股票 {stock_id}')
+            if stock_id not in subscriptions:
+                subscriptions[stock_id] = []
+            if request.sid not in subscriptions[stock_id]:
+                subscriptions[stock_id].append(request.sid)
+    
+    def push_realtime_prices():
+        """后台线程：定期推送实时行情"""
+        while True:
+            try:
+                for stock_id, sids in list(subscriptions.items()):
+                    if not sids:
+                        continue
+                    
+                    # 获取股票信息
+                    stock = Stock.query.get(stock_id)
+                    if not stock:
+                        continue
+                    
+                    # 获取实时行情
+                    realtime_data = get_realtime_price(stock.code)
+                    if realtime_data:
+                        # 推送到所有订阅者
+                        for sid in sids:
+                            socketio.emit('price_update', {
+                                'stock_id': stock_id,
+                                'data': realtime_data
+                            }, room=sid)
+                
+                # 每5秒推送一次
+                time.sleep(5)
+            except Exception as e:
+                print(f'推送实时行情失败: {e}')
+                time.sleep(5)
+    
+    # 启动后台推送线程
+    push_thread = threading.Thread(target=push_realtime_prices, daemon=True)
+    push_thread.start()
+    print('✅ 实时行情推送服务已启动')
 
 
 # 创建应用实例

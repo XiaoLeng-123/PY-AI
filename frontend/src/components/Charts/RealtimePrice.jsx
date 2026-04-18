@@ -33,55 +33,169 @@ const RealtimePrice = ({ stockId, stockCode, stockName }) => {
   }
 
   const change = realtimePrice.change || 0
-  const changePercent = realtimePrice.change_percent || 0
+  const changeAmount = realtimePrice.change_amount || 0
+
+  // 格式化数字
+  const formatNumber = (num, decimals = 2) => {
+    if (num === null || num === undefined) return '-'
+    return Number(num).toFixed(decimals)
+  }
+
+  const formatVolume = (vol) => {
+    if (!vol) return '-'
+    if (vol >= 10000) {
+      return (vol / 10000).toFixed(2) + '万'
+    }
+    return vol.toLocaleString()
+  }
 
   return (
     <div style={{
-      padding: '12px 16px',
-      background: '#f6ffed',
+      padding: '16px',
+      background: '#fff',
       borderRadius: '8px',
-      border: '1px solid #b7eb8f'
+      border: '1px solid #e8e8e8',
+      boxShadow: '0 2px 8px rgba(0,0,0,0.06)'
     }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      {/* 顶部：股票名称和代码 */}
+      <div style={{ 
+        marginBottom: '12px',
+        paddingBottom: '12px',
+        borderBottom: '1px solid #f0f0f0',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center'
+      }}>
+        <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#333' }}>
+          {stockName} <span style={{ color: '#999', fontSize: '13px' }}>{stockCode}</span>
+        </div>
+        <div style={{
+          padding: '2px 8px',
+          background: '#52c41a',
+          color: '#fff',
+          borderRadius: '4px',
+          fontSize: '11px'
+        }}>
+          🟢 实时更新中
+        </div>
+      </div>
+
+      {/* 中间：价格和涨跌幅 */}
+      <div style={{ 
+        display: 'grid',
+        gridTemplateColumns: '1fr auto',
+        gap: '24px',
+        alignItems: 'center',
+        marginBottom: '16px'
+      }}>
         <div>
-          <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>
-            实时价格 {stockCode}
-          </div>
-          <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#333' }}>
-            ¥{realtimePrice.price?.toFixed(2)}
+          <div style={{ fontSize: '12px', color: '#999', marginBottom: '4px' }}>最新价</div>
+          <div style={{ 
+            fontSize: '32px', 
+            fontWeight: 'bold', 
+            color: change >= 0 ? '#ef5350' : '#26a69a'
+          }}>
+            ¥{formatNumber(realtimePrice.price)}
           </div>
         </div>
         
         <div style={{ textAlign: 'right' }}>
-          <div className={change >= 0 ? 'positive' : 'negative'} style={{ fontSize: '18px', fontWeight: 'bold' }}>
-            {change >= 0 ? '+' : ''}{change.toFixed(2)}
+          <div style={{ 
+            fontSize: '24px', 
+            fontWeight: 'bold',
+            color: change >= 0 ? '#ef5350' : '#26a69a'
+          }}>
+            {change >= 0 ? '+' : ''}{formatNumber(change)}%
           </div>
-          <div className={changePercent >= 0 ? 'positive' : 'negative'} style={{ fontSize: '14px' }}>
-            {changePercent >= 0 ? '↑' : '↓'} {Math.abs(changePercent).toFixed(2)}%
+          <div style={{ 
+            fontSize: '14px',
+            color: change >= 0 ? '#ef5350' : '#26a69a'
+          }}>
+            {change >= 0 ? '+' : ''}{formatNumber(changeAmount)}
           </div>
         </div>
       </div>
       
-      <div style={{ 
-        marginTop: '8px', 
-        paddingTop: '8px', 
-        borderTop: '1px solid #d9f7be',
-        fontSize: '12px',
-        color: '#666',
-        display: 'flex',
-        gap: '16px'
-      }}>
-        <span>最高: ¥{realtimePrice.high?.toFixed(2)}</span>
-        <span>最低: ¥{realtimePrice.low?.toFixed(2)}</span>
-        <span>成交量: {(realtimePrice.volume || 0).toLocaleString()}</span>
-      </div>
-      
+      {/* 底部：详细指标网格 */}
       <div style={{
-        marginTop: '4px',
-        fontSize: '11px',
-        color: '#52c41a'
+        display: 'grid',
+        gridTemplateColumns: 'repeat(4, 1fr)',
+        gap: '12px',
+        paddingTop: '12px',
+        borderTop: '1px solid #f0f0f0'
       }}>
-        🟢 实时更新中
+        <div>
+          <div style={{ fontSize: '11px', color: '#999', marginBottom: '4px' }}>最高</div>
+          <div style={{ fontSize: '14px', fontWeight: '600', color: '#333' }}>
+            ¥{formatNumber(realtimePrice.high)}
+          </div>
+        </div>
+        <div>
+          <div style={{ fontSize: '11px', color: '#999', marginBottom: '4px' }}>最低</div>
+          <div style={{ fontSize: '14px', fontWeight: '600', color: '#333' }}>
+            ¥{formatNumber(realtimePrice.low)}
+          </div>
+        </div>
+        <div>
+          <div style={{ fontSize: '11px', color: '#999', marginBottom: '4px' }}>开盘</div>
+          <div style={{ fontSize: '14px', fontWeight: '600', color: '#333' }}>
+            ¥{formatNumber(realtimePrice.open)}
+          </div>
+        </div>
+        <div>
+          <div style={{ fontSize: '11px', color: '#999', marginBottom: '4px' }}>昨收</div>
+          <div style={{ fontSize: '14px', fontWeight: '600', color: '#333' }}>
+            ¥{formatNumber(realtimePrice.prev_close)}
+          </div>
+        </div>
+        <div>
+          <div style={{ fontSize: '11px', color: '#999', marginBottom: '4px' }}>成交量</div>
+          <div style={{ fontSize: '14px', fontWeight: '600', color: '#333' }}>
+            {formatVolume(realtimePrice.volume)}手
+          </div>
+        </div>
+        <div>
+          <div style={{ fontSize: '11px', color: '#999', marginBottom: '4px' }}>成交额</div>
+          <div style={{ fontSize: '14px', fontWeight: '600', color: '#333' }}>
+            {formatVolume(realtimePrice.amount)}万
+          </div>
+        </div>
+        <div>
+          <div style={{ fontSize: '11px', color: '#999', marginBottom: '4px' }}>换手率</div>
+          <div style={{ fontSize: '14px', fontWeight: '600', color: '#333' }}>
+            {formatNumber(realtimePrice.turnover)}%
+          </div>
+        </div>
+        <div>
+          <div style={{ fontSize: '11px', color: '#999', marginBottom: '4px' }}>量比</div>
+          <div style={{ fontSize: '14px', fontWeight: '600', color: '#333' }}>
+            {formatNumber(realtimePrice.volume_ratio)}
+          </div>
+        </div>
+        <div>
+          <div style={{ fontSize: '11px', color: '#999', marginBottom: '4px' }}>市盈率</div>
+          <div style={{ fontSize: '14px', fontWeight: '600', color: '#333' }}>
+            {formatNumber(realtimePrice.pe)}
+          </div>
+        </div>
+        <div>
+          <div style={{ fontSize: '11px', color: '#999', marginBottom: '4px' }}>振幅</div>
+          <div style={{ fontSize: '14px', fontWeight: '600', color: '#333' }}>
+            {formatNumber(realtimePrice.amplitude)}%
+          </div>
+        </div>
+        <div>
+          <div style={{ fontSize: '11px', color: '#999', marginBottom: '4px' }}>总市值</div>
+          <div style={{ fontSize: '14px', fontWeight: '600', color: '#333' }}>
+            {formatNumber(realtimePrice.total_market_value, 1)}亿
+          </div>
+        </div>
+        <div>
+          <div style={{ fontSize: '11px', color: '#999', marginBottom: '4px' }}>流通市值</div>
+          <div style={{ fontSize: '14px', fontWeight: '600', color: '#333' }}>
+            {formatNumber(realtimePrice.circulating_value, 1)}亿
+          </div>
+        </div>
       </div>
     </div>
   )

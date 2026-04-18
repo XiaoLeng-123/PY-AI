@@ -121,15 +121,17 @@ export default function AlertPage({ stocks, selectedStock, toast }) {
                   <td>{alert.stock_code} - {alert.stock_name}</td>
                   <td>
                     <span className="tag">
-                      {alert.alert_type === 'price' ? '价格' : 
-                       alert.alert_type === 'change' ? '涨跌幅' : 
-                       alert.alert_type === 'volume' ? '成交量' : '技术指标'}
+                      {alert.alert_type === 'price' ? '💰 价格' : 
+                       alert.alert_type === 'change' ? '📈 涨跌幅' : 
+                       alert.alert_type === 'volume' ? '📊 成交量' : '🎯 技术指标'}
                     </span>
                   </td>
                   <td>
                     {alert.condition === 'above' ? '高于' : 
                      alert.condition === 'below' ? '低于' : 
-                     alert.condition === 'cross_up' ? '上穿' : '下穿'}
+                     alert.condition === 'cross_up' ? (alert.alert_type === 'technical' ? '金叉/超买' : '上穿') : 
+                     alert.condition === 'ma_cross_up' ? '均线金叉' :
+                     alert.condition === 'ma_cross_down' ? '均线死叉' : '下穿'}
                   </td>
                   <td>{alert.threshold}</td>
                   <td>
@@ -176,13 +178,30 @@ export default function AlertPage({ stocks, selectedStock, toast }) {
                 <select value={alertForm.alert_type} onChange={(e) => setAlertForm({...alertForm, alert_type: e.target.value})}>
                   <option value="price">价格预警</option>
                   <option value="change">涨跌幅预警</option>
+                  <option value="volume">成交量预警</option>
+                  <option value="technical">技术指标预警</option>
                 </select>
               </div>
               <div className="form-item">
                 <label>触发条件</label>
                 <select value={alertForm.condition} onChange={(e) => setAlertForm({...alertForm, condition: e.target.value})}>
-                  <option value="above">高于</option>
-                  <option value="below">低于</option>
+                  {alertForm.alert_type === 'technical' ? (
+                    <>
+                      <option value="cross_up">MACD金叉</option>
+                      <option value="cross_down">MACD死叉</option>
+                      <option value="above">RSI超买(&gt;70)</option>
+                      <option value="below">RSI超卖(&lt;30)</option>
+                      <option value="ma_cross_up">均线金叉</option>
+                      <option value="ma_cross_down">均线死叉</option>
+                    </>
+                  ) : (
+                    <>
+                      <option value="above">高于</option>
+                      <option value="below">低于</option>
+                      <option value="cross_up">上穿</option>
+                      <option value="cross_down">下穿</option>
+                    </>
+                  )}
                 </select>
               </div>
               <div className="form-item">
