@@ -1,227 +1,249 @@
-import React, { useEffect, useRef } from 'react';
-import * as echarts from 'echarts';
+import React, { useEffect, useRef } from 'react'
+import * as echarts from 'echarts'
 
 const StockChart = ({ stockData, indicators }) => {
-  const chartRef = useRef(null);
-  const chartInstance = useRef(null);
+  const chartRef = useRef(null)
+  const chartInstance = useRef(null)
 
   useEffect(() => {
     if (!stockData || !stockData.dates || stockData.dates.length === 0) {
-      // 显示空状态
       if (chartRef.current) {
-        chartRef.current.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#999;font-size:14px;">暂无数据</div>';
+        chartRef.current.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#999;font-size:14px;">暂无数据</div>'
       }
-      return;
+      return
     }
 
-    console.log('K线图数据:', stockData);
-    console.log('技术指标:', indicators);
-
-    // 初始化图表
-    if (!chartInstance.current) {
-      chartInstance.current = echarts.init(chartRef.current);
+    // 销毁旧实例
+    if (chartInstance.current) {
+      try { chartInstance.current.dispose() } catch (e) {}
+      chartInstance.current = null
     }
 
-    // 准备K线数据
-    const kData = [];
-    for (let i = 0; i < stockData.dates.length; i++) {
-      kData.push([
-        stockData.dates[i],
-        stockData.opens[i],
-        stockData.closes[i],
-        stockData.lows[i],
-        stockData.highs[i]
-      ]);
-    }
+    if (!chartRef.current) return
 
-    // 配置选项
+    chartInstance.current = echarts.init(chartRef.current)
+
+    const upColor = '#ec0000'
+    const downColor = '#00da3c'
+    const upBorderColor = '#8A0000'
+    const downBorderColor = '#008F28'
+
+    // K线数据：[open, close, low, high]
+    const values = stockData.dates.map((_, i) => [
+      stockData.opens[i],
+      stockData.closes[i],
+      stockData.lows[i],
+      stockData.highs[i]
+    ])
+
+    // 成交量数据
+    const volumes = stockData.dates.map((_, i) => [
+      i,
+      stockData.volumes[i],
+      stockData.closes[i] > stockData.opens[i] ? 1 : -1
+    ])
+
+    console.log('📊 StockChart 数据对齐检查:', {
+      datesLen: stockData.dates.length,
+      closesLen: stockData.closes.length,
+      ma5Len: indicators?.ma5?.length,
+      ma10Len: indicators?.ma10?.length,
+      closesFirst5: stockData.closes.slice(0, 5),
+      closesLast5: stockData.closes.slice(-5),
+      ma5First5: indicators?.ma5?.slice(0, 5),
+      ma5Last5: indicators?.ma5?.slice(-5),
+      datesFirst3: stockData.dates.slice(0, 3),
+      datesLast3: stockData.dates.slice(-3)
+    })
+
     const option = {
-      title: {
-        text: `${stockData.stock_code} - ${stockData.stock_name}`,
+      animation: false,
+      legend: {
+        bottom: 10,
         left: 'center',
-        textStyle: {
-          fontSize: 16,
-          fontWeight: 'bold'
-        }
+        data: ['日K', 'MA5', 'MA10', 'MA20', 'MA60']
       },
       tooltip: {
         trigger: 'axis',
         axisPointer: {
           type: 'cross'
         },
-        formatter: function(params) {
-          let result = params[0].axisValue + '<br/>';
-          params.forEach(param => {
-            if (param.seriesName && param.data) {
-              result += param.seriesName + ': ' + param.data + '<br/>';
-            }
-          });
-          return result;
+        borderWidth: 1,
+        borderColor: '#ccc',
+        padding: 10,
+        textStyle: {
+          color: '#000'
+        },
+        position: function (pos, params, el, elRect, size) {
+          const obj = { top: 10 }
+          obj[['left', 'right'][+(pos[0] < size.viewSize[0] / 2)]] = 30
+          return obj
         }
       },
-      legend: {
-        data: ['K线', 'MA5', 'MA10', 'MA20', 'MA60', 'MACD', 'RSI'],
-        bottom: 10
+      axisPointer: {
+        link: { xAxisIndex: 'all' },
+        label: {
+          backgroundColor: '#777'
+        }
       },
       grid: [
-        { // 主图 - K线
+        {
           left: '10%',
-          right: '10%',
-          top: '10%',
+          right: '8%',
           height: '50%'
         },
-        { // 副图 - 成交量
+        {
           left: '10%',
-          right: '10%',
-          top: '65%',
-          height: '10%'
-        },
-        { // 副图 - MACD
-          left: '10%',
-          right: '10%',
-          top: '78%',
-          height: '10%'
-        },
-        { // 副图 - RSI
-          left: '10%',
-          right: '10%',
-          top: '91%',
-          height: '8%'
+          right: '8%',
+          top: '63%',
+          height: '16%'
         }
       ],
       xAxis: [
-        { gridIndex: 0, type: 'category', data: stockData.dates },
-        { gridIndex: 1, type: 'category', data: stockData.dates },
-        { gridIndex: 2, type: 'category', data: stockData.dates },
-        { gridIndex: 3, type: 'category', data: stockData.dates }
+        {
+          type: 'category',
+          data: stockData.dates,
+          scale: true,
+          boundaryGap: false,
+          axisLine: { onZero: false },
+          splitLine: { show: false },
+          splitNumber: 20,
+          min: 'dataMin',
+          max: 'dataMax'
+        },
+        {
+          type: 'category',
+          gridIndex: 1,
+          data: stockData.dates,
+          scale: true,
+          boundaryGap: false,
+          axisLine: { onZero: false },
+          axisTick: { show: false },
+          splitLine: { show: false },
+          axisLabel: { show: false },
+          splitNumber: 20,
+          min: 'dataMin',
+          max: 'dataMax'
+        }
       ],
       yAxis: [
-        { gridIndex: 0, scale: true },
-        { gridIndex: 1, scale: true },
-        { gridIndex: 2, scale: true },
-        { gridIndex: 3, scale: true }
-      ],
-      series: [
-        // K线
         {
-          name: 'K线',
-          type: 'candlestick',
-          data: kData,
-          gridIndex: 0,
-          itemStyle: {
-            color: '#ef5350', // 阳线红色
-            color0: '#26a69a', // 阴线绿色
-            borderColor: '#ef5350',
-            borderColor0: '#26a69a'
+          scale: true,
+          splitArea: {
+            show: true
           }
         },
-        // 成交量
         {
-          name: '成交量',
-          type: 'bar',
-          data: stockData.volumes || [],
+          scale: true,
           gridIndex: 1,
+          splitNumber: 2,
+          axisLabel: { show: false },
+          axisLine: { show: false },
+          axisTick: { show: false },
+          splitLine: { show: false }
+        }
+      ],
+      dataZoom: [
+        {
+          type: 'inside',
+          xAxisIndex: [0, 1],
+          start: 50,
+          end: 100
+        },
+        {
+          show: true,
+          xAxisIndex: [0, 1],
+          type: 'slider',
+          top: '85%',
+          start: 50,
+          end: 100
+        }
+      ],
+      visualMap: {
+        show: false,
+        seriesIndex: 5,
+        pieces: [
+          { value: 1, color: downColor },
+          { value: -1, color: upColor }
+        ]
+      },
+      series: [
+        {
+          name: '日K',
+          type: 'candlestick',
+          data: values,
           itemStyle: {
-            color: function(params) {
-              const dataIndex = params.dataIndex;
-              if (dataIndex > 0) {
-                const prevClose = stockData.closes[dataIndex - 1];
-                const currentClose = stockData.closes[dataIndex];
-                return currentClose >= prevClose ? '#ef5350' : '#26a69a';
-              }
-              return '#ef5350';
-            }
+            color: upColor,
+            color0: downColor,
+            borderColor: upBorderColor,
+            borderColor0: downBorderColor
           }
         },
-        // MA5
         {
           name: 'MA5',
           type: 'line',
-          data: indicators.ma5 || [],
+          data: indicators?.ma5 || [],
           smooth: true,
-          lineStyle: { color: '#FF6B6B', width: 1 },
-          gridIndex: 0
+          lineStyle: {
+            opacity: 0.5
+          }
         },
-        // MA10
         {
           name: 'MA10',
           type: 'line',
-          data: indicators.ma10 || [],
+          data: indicators?.ma10 || [],
           smooth: true,
-          lineStyle: { color: '#4ECDC4', width: 1 },
-          gridIndex: 0
+          lineStyle: {
+            opacity: 0.5
+          }
         },
-        // MA20
         {
           name: 'MA20',
           type: 'line',
-          data: indicators.ma20 || [],
+          data: indicators?.ma20 || [],
           smooth: true,
-          lineStyle: { color: '#45B7D1', width: 1 },
-          gridIndex: 0
+          lineStyle: {
+            opacity: 0.5
+          }
         },
-        // MA60
         {
           name: 'MA60',
           type: 'line',
-          data: indicators.ma60 || [],
+          data: indicators?.ma60 || [],
           smooth: true,
-          lineStyle: { color: '#96CEB4', width: 1 },
-          gridIndex: 0
-        },
-        // MACD线
-        {
-          name: 'MACD',
-          type: 'bar',
-          data: indicators.macd?.histogram || [],
-          gridIndex: 2,
-          itemStyle: {
-            color: function(params) {
-              return params.data >= 0 ? '#ef5350' : '#26a69a';
-            }
+          lineStyle: {
+            opacity: 0.5
           }
         },
-        // MACD信号线
         {
-          name: 'Signal',
-          type: 'line',
-          data: indicators.macd?.signal_line || [],
-          smooth: true,
-          lineStyle: { color: '#FFD93D', width: 1 },
-          gridIndex: 2
-        },
-        // RSI线
-        {
-          name: 'RSI',
-          type: 'line',
-          data: indicators.rsi || [],
-          smooth: true,
-          lineStyle: { color: '#BA55D3', width: 2 },
-          gridIndex: 3
+          name: '成交量',
+          type: 'bar',
+          xAxisIndex: 1,
+          yAxisIndex: 1,
+          data: volumes
         }
       ]
-    };
+    }
 
-    chartInstance.current.setOption(option);
+    chartInstance.current.setOption(option)
 
-    // 处理窗口大小变化
     const handleResize = () => {
       if (chartInstance.current) {
-        chartInstance.current.resize();
+        chartInstance.current.resize()
       }
-    };
-
-    window.addEventListener('resize', handleResize);
+    }
+    window.addEventListener('resize', handleResize)
 
     return () => {
-      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('resize', handleResize)
       if (chartInstance.current) {
-        chartInstance.current.dispose();
+        try { chartInstance.current.dispose() } catch (e) {}
+        chartInstance.current = null
       }
-    };
-  }, [stockData, indicators]);
+    }
+  }, [stockData, indicators])
 
-  return <div ref={chartRef} style={{ width: '100%', height: '600px' }} />;
-};
+  return <div ref={chartRef} style={{ width: '100%', height: '600px' }} />
+}
 
-export default StockChart;
+export default StockChart

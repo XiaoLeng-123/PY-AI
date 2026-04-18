@@ -25,7 +25,7 @@ export const stockAPI = {
   getPatterns: (stockId) => axios.get(`${API_BASE}/stocks/${stockId}/patterns`),
   
   // 技术指标
-  getIndicators: (stockId) => axios.get(`${API_BASE}/stocks/${stockId}/indicators`),
+  getIndicators: (stockId, params) => axios.get(`${API_BASE}/stocks/${stockId}/indicators`, { params }),
 }
 
 // 持仓管理API

@@ -21,7 +21,7 @@ body {
 /* 侧边栏 */
 .sidebar {
   width: 200px;
-  background: linear-gradient(180deg, #001529 0%, #002140 100%);
+  background: linear-gradient(180deg, var(--theme-sidebar, #001529) 0%, rgba(0, 0, 0, 0.3) 100%);
   color: #fff;
   display: flex;
   flex-direction: column;
@@ -48,7 +48,7 @@ body {
   height: 36px;
   min-width: 36px;
   border-radius: 8px;
-  background: linear-gradient(135deg, #1890ff 0%, #096dd9 100%);
+  background: linear-gradient(135deg, var(--theme-primary, #1890ff) 0%, var(--theme-secondary, #096dd9) 100%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -93,7 +93,7 @@ body {
 }
 
 .menu-item.active {
-  background: #1890ff;
+  background: var(--theme-primary, #1890ff);
 }
 
 .menu-item.active::before {
@@ -201,7 +201,7 @@ body {
 
 /* 卡片 */
 .card {
-  background: #fff;
+  background: var(--theme-card, #fff);
   border-radius: 4px;
   padding: 20px;
   margin-bottom: 12px;
@@ -265,6 +265,12 @@ body {
   border-radius: 4px;
   font-size: 14px;
   transition: all 0.3s;
+  background: #fff;
+}
+
+.form-item input:hover,
+.form-item select:hover {
+  border-color: #40a9ff;
 }
 
 .form-item input:focus,
@@ -279,6 +285,26 @@ body {
   gap: 16px;
   align-items: flex-end;
   flex-wrap: wrap;
+}
+
+/* 表单网格增强 */
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
+}
+
+/* 输入框占位符样式 */
+.form-item input::placeholder {
+  color: #bfbfbf;
+}
+
+/* 禁用状态 */
+.form-item input:disabled,
+.form-item select:disabled {
+  background: #f5f5f5;
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 
 /* 按钮 */
@@ -298,21 +324,21 @@ button:disabled {
 }
 
 .btn-primary {
-  background: #1890ff;
+  background: var(--theme-primary, #1890ff);
   color: #fff;
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: #40a9ff;
+  background: var(--theme-secondary, #40a9ff);
 }
 
 .btn-secondary {
-  background: #722ed1;
+  background: var(--theme-accent, #722ed1);
   color: #fff;
 }
 
 .btn-secondary:hover:not(:disabled) {
-  background: #9254de;
+  background: var(--theme-secondary, #9254de);
 }
 
 .btn-success {
@@ -397,6 +423,138 @@ button:disabled {
 /* 数据概览 */
 .dashboard {
   animation: fadeIn 0.3s;
+}
+
+/* 数据概览页面标题动画 */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 旋转动画 */
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* 数据概览 - 现代统计卡片网格 */
+.dashboard-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 20px;
+  width: 100%;
+  margin-bottom: 20px;
+}
+
+/* 现代统计卡片 */
+.modern-stat-card {
+  position: relative;
+  background: #fff;
+  border-radius: 16px;
+  padding: 24px;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 1px solid #f0f0f0;
+  overflow: hidden;
+  opacity: 0;
+  animation: fadeInUp 0.5s ease forwards;
+  cursor: default;
+}
+
+.modern-stat-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: var(--card-gradient);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.modern-stat-card:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 12px 24px var(--card-shadow, rgba(0,0,0,0.15));
+  border-color: transparent;
+}
+
+.modern-stat-card:hover::before {
+  opacity: 1;
+}
+
+.modern-stat-card:active {
+  transform: translateY(-3px);
+}
+
+/* 卡片图标 */
+.stat-card-icon {
+  width: 64px;
+  height: 64px;
+  min-width: 64px;
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  transition: all 0.3s ease;
+}
+
+.modern-stat-card:hover .stat-card-icon {
+  transform: scale(1.1) rotate(5deg);
+}
+
+/* 卡片内容 */
+.stat-card-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.stat-card-label {
+  font-size: 14px;
+  color: #999;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.stat-card-value {
+  font-size: 32px;
+  font-weight: 700;
+  line-height: 1.2;
+  transition: all 0.3s ease;
+}
+
+.stat-card-value.date-value {
+  font-size: 24px;
+  font-family: 'Courier New', monospace;
+  font-weight: 600;
+}
+
+.modern-stat-card:hover .stat-card-value {
+  transform: scale(1.05);
+}
+
+.stat-card-subtitle {
+  font-size: 12px;
+  color: #bbb;
+  margin-top: 2px;
 }
 
 .stock-selector-bar {

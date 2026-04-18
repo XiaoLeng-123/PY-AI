@@ -11,6 +11,15 @@
   --shadow:
     rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
 
+  /* 主题变量 - 可被themes.js动态修改 */
+  --theme-primary: #ff4d4f;
+  --theme-secondary: #ff7875;
+  --theme-background: #fff1f0;
+  --theme-text: #262626;
+  --theme-sidebar: #a8071a;
+  --theme-card: #ffffff;
+  --theme-accent: #ff4d4f;
+
   --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
   --heading: system-ui, 'Segoe UI', Roboto, sans-serif;
   --mono: ui-monospace, Consolas, monospace;

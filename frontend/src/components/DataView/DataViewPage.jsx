@@ -29,7 +29,8 @@ const DataViewPage = ({ stocks, toast }) => {
       const response = await stockAPI.getPrices(selectedStock.id, { days: dateRange })
       // API直接返回数组
       const prices = Array.isArray(response.data) ? response.data : []
-      console.log('价格数据加载成功:', prices.length, '条')
+      console.log('💰 价格数据加载成功:', prices.length, '条')
+      console.log('📅 日期范围:', prices.length > 0 ? `${prices[0].date} ~ ${prices[prices.length-1].date}` : '无数据')
       setPriceData(prices)
     } catch (error) {
       console.error('加载价格数据失败:', error)
@@ -42,7 +43,13 @@ const DataViewPage = ({ stocks, toast }) => {
 
   const loadIndicators = async () => {
     try {
-      const response = await stockAPI.getIndicators(selectedStock.id)
+      const response = await stockAPI.getIndicators(selectedStock.id, { days: dateRange })
+      console.log('📈 技术指标加载成功:', {
+        ma5Len: response.data?.ma5?.length,
+        ma60Len: response.data?.ma60?.length,
+        macdLen: response.data?.macd?.histogram?.length,
+        rsiLen: response.data?.rsi?.length
+      })
       setIndicators(response.data)
     } catch (error) {
       console.error('加载技术指标失败:', error)
@@ -68,17 +75,21 @@ const DataViewPage = ({ stocks, toast }) => {
     toast.success('导出成功')
   }
 
-  // 准备图表数据
+  // 准备图表数据（按时间正序：旧 -> 新）
+  const sortedAsc = [...priceData].sort((a, b) => new Date(a.date) - new Date(b.date))
   const chartData = {
     stock_code: selectedStock?.code,
     stock_name: selectedStock?.name,
-    dates: priceData.map(p => p.date),
-    opens: priceData.map(p => p.open),
-    highs: priceData.map(p => p.high),
-    lows: priceData.map(p => p.low),
-    closes: priceData.map(p => p.close),
-    volumes: priceData.map(p => p.volume)
+    dates: sortedAsc.map(p => p.date),
+    opens: sortedAsc.map(p => p.open),
+    highs: sortedAsc.map(p => p.high),
+    lows: sortedAsc.map(p => p.low),
+    closes: sortedAsc.map(p => p.close),
+    volumes: sortedAsc.map(p => p.volume)
   }
+
+  // 历史明细按时间倒序（最新在前：新 -> 旧）
+  const sortedDesc = [...priceData].sort((a, b) => new Date(b.date) - new Date(a.date))
 
   console.log('准备图表数据:', chartData)
 
@@ -180,10 +191,10 @@ const DataViewPage = ({ stocks, toast }) => {
                 </tr>
               </thead>
               <tbody>
-                {priceData.slice().reverse().map((item, index) => {
-                  const prevClose = index < priceData.length - 1 
-                    ? priceData[priceData.length - 2 - index].close 
-                    : item.open
+                {sortedDesc.map((item, index) => {
+                  // 前一个交易日收盘价（用于计算涨跌幅）
+                  const prevItem = sortedDesc[index + 1]
+                  const prevClose = prevItem ? prevItem.close : item.open
                   const change = ((item.close - prevClose) / prevClose * 100).toFixed(2)
                   
                   return (
