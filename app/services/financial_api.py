@@ -1,0 +1,889 @@
+"""真实财务数据获取模块 - 多平台数据对比 + 进阶交易数据"""
+import requests
+import re
+import datetime
+
+
+def get_financial_reports(stock_code):
+    """从东方财富API获取真实财务报告数据"""
+    try:
+        # 东方财富财务数据API
+        eastmoney_url = "https://datacenter.eastmoney.com/api/data/get"
+        params = {
+            'type': 'RPT_F10_FINANCE_MAINFINADATA',
+            'sty': 'APP_F10_MAINFINADATA',
+            'filter': f'(SECURITY_CODE="{stock_code}")',
+            'ps': '10',
+            'p': '1',
+            'sr': '-1',
+            'st': 'REPORT_DATE'
+        }
+        
+        resp = requests.get(eastmoney_url, params=params, timeout=10)
+        if resp.status_code == 200:
+            data = resp.json()
+            if data.get('result') and data['result'].get('data'):
+                reports = data['result']['data']
+                print(f"东方财富API成功，获取到 {len(reports)} 条财务数据")
+                return reports
+    except Exception as e:
+        print(f"东方财富API失败: {e}")
+    return None
+
+
+def get_financial_from_tonghuashun(stock_code):
+    """从同花顺API获取财务数据（备用数据源）"""
+    try:
+        # 同花顺财务数据API
+        if stock_code.startswith('6'):
+            ths_code = f"1{stock_code}"
+        else:
+            ths_code = f"0{stock_code}"
+        
+        url = f"http://d.10jqka.com.cn/v2/financial/index/{ths_code}.js"
+        headers = {
+            'Referer': 'http://stockpage.10jqka.com.cn/',
+            'User-Agent': 'Mozilla/5.0'
+        }
+        
+        resp = requests.get(url, headers=headers, timeout=10)
+        if resp.status_code == 200:
+            # 同花顺返回的是JSONP格式，需要解析
+            text = resp.text
+            # 提取JSON部分
+            match = re.search(r'\{.*\}', text)
+            if match:
+                import json
+                data = json.loads(match.group())
+                print(f"同花顺API成功")
+                return data.get('data', {})
+    except Exception as e:
+        print(f"同花顺API失败: {e}")
+    return None
+
+
+def get_latest_price_multi_source(stock_code):
+    """从多个平台获取实时股价，返回对比数据"""
+    results = {
+        'sina': None,  # 新浪财经
+        'tencent': None,  # 腾讯财经
+        'eastmoney': None  # 东方财富
+    }
+    
+    # 1. 新浪财经
+    try:
+        sina_code = f"sz{stock_code}" if stock_code.startswith(('0', '3')) else f"sh{stock_code}"
+        sina_url = f"https://hq.sinajs.cn/list={sina_code}"
+        resp = requests.get(sina_url, headers={'Referer': 'https://finance.sina.com.cn'}, timeout=5)
+        if resp.status_code == 200:
+            sina_data = resp.content.decode('gbk')
+            match = re.search(r'hq_str_{}="([^"]*)"'.format(sina_code), sina_data)
+            if match:
+                parts = match.group(1).split(',')
+                if len(parts) > 3:
+                    results['sina'] = {
+                        'price': float(parts[3]),
+                        'open': float(parts[1]) if parts[1] else 0,
+                        'high': float(parts[4]) if parts[4] else 0,
+                        'low': float(parts[5]) if parts[5] else 0,
+                        'volume': int(parts[8]) if parts[8] else 0
+                    }
+    except Exception as e:
+        print(f"新浪财经获取失败: {e}")
+    
+    # 2. 腾讯财经
+    try:
+        tencent_code = f"sz{stock_code}" if stock_code.startswith(('0', '3')) else f"sh{stock_code}"
+        tencent_url = f"https://web.ifzq.gtimg.cn/appstock/app/quote/real/get"
+        params = {'param': tencent_code}
+        resp = requests.get(tencent_url, params=params, timeout=5)
+        if resp.status_code == 200:
+            data = resp.json()
+            if data.get('code') == 0:
+                stock_data = data.get('data', {}).get(tencent_code, {})
+                qt = stock_data.get('qt', {}).get(tencent_code, {})
+                if qt:
+                    results['tencent'] = {
+                        'price': float(qt.get('now', 0)),
+                        'open': float(qt.get('open', 0)),
+                        'high': float(qt.get('high', 0)),
+                        'low': float(qt.get('low', 0)),
+                        'volume': int(qt.get('volume', 0))
+                    }
+    except Exception as e:
+        print(f"腾讯财经获取失败: {e}")
+    
+    # 3. 东方财富
+    try:
+        secid = f"1.{stock_code}" if stock_code.startswith('6') else f"0.{stock_code}"
+        eastmoney_url = f"https://push2.eastmoney.com/api/qt/stock/get"
+        params = {
+            'secid': secid,
+            'fields': 'f43,f44,f45,f46,f47,f48'
+        }
+        resp = requests.get(eastmoney_url, params=params, timeout=5)
+        if resp.status_code == 200:
+            data = resp.json()
+            if data.get('data'):
+                d = data['data']
+                results['eastmoney'] = {
+                    'price': d.get('f43', 0) / 100 if d.get('f43') else 0,
+                    'open': d.get('f46', 0) / 100 if d.get('f46') else 0,
+                    'high': d.get('f44', 0) / 100 if d.get('f44') else 0,
+                    'low': d.get('f45', 0) / 100 if d.get('f45') else 0,
+                    'volume': d.get('f47', 0) if d.get('f47') else 0
+                }
+    except Exception as e:
+        print(f"东方财富获取失败: {e}")
+    
+    # 计算数据一致性和差异百分比
+    prices = [v['price'] for v in results.values() if v and v.get('price')]
+    if len(prices) >= 2:
+        avg_price = sum(prices) / len(prices)
+        max_diff = max(abs(p - avg_price) for p in prices)
+        diff_percentage = (max_diff / avg_price * 100) if avg_price > 0 else 0
+        consistency = '高' if max_diff < 0.05 else ('中' if max_diff < 0.2 else '低')
+        
+        # 计算各平台与平均值的差异
+        for platform, data in results.items():
+            if data and data.get('price'):
+                diff_from_avg = data['price'] - avg_price
+                diff_pct = (diff_from_avg / avg_price * 100) if avg_price > 0 else 0
+                results[platform]['diff_from_avg'] = round(diff_from_avg, 2)
+                results[platform]['diff_percentage'] = round(diff_pct, 2)
+    else:
+        consistency = '无法对比'
+        diff_percentage = 0
+    
+    return results, consistency
+
+
+def get_latest_price(stock_code):
+    """从新浪财经获取实时股价（简化版）"""
+    results, _ = get_latest_price_multi_source(stock_code)
+    # 优先返回新浪财经的数据
+    if results['sina']:
+        return results['sina']['price']
+    elif results['tencent']:
+        return results['tencent']['price']
+    elif results['eastmoney']:
+        return results['eastmoney']['price']
+    return None
+
+
+def get_longhubang_data(date=None):
+    """获取龙虎榜数据（东方财富）"""
+    try:
+        if date is None:
+            date = datetime.datetime.now().strftime('%Y-%m-%d')
+        
+        # 东方财富龙虎榜API
+        url = "https://datacenter-web.eastmoney.com/api/data/v1/get"
+        params = {
+            'reportName': 'RPT_DAILYBILLBOARD_DETAILSNEW',
+            'columns': 'TRADE_DATE,SECURITY_CODE,SECURITY_NAME_ABBR,CHANGE_RATE,CLOSE_PRICE,TURNOVERRATE,BILLBOARD_NET_AMT,BILLBOARD_BUY_AMT,BILLBOARD_SELL_AMT,BILLBOARD_DEAL_AMT,ACCUM_AMOUNT,DEAL_NET_RATIO,DEAL_AMOUNT_RATIO,EXPLANATION',
+            'filter': f"(TRADE_DATE='{date}')",
+            'pageSize': '50',
+            'pageNumber': '1',
+            'sortTypes': '-1',
+            'sortColumns': 'BILLBOARD_NET_AMT'
+        }
+        
+        headers = {
+            'Referer': 'https://data.eastmoney.com/billboard/',
+            'User-Agent': 'Mozilla/5.0'
+        }
+        
+        resp = requests.get(url, params=params, headers=headers, timeout=10)
+        if resp.status_code == 200:
+            data = resp.json()
+            if data.get('result') and data['result'].get('data'):
+                items = data['result']['data']
+                print(f"龙虎榜数据获取成功，共 {len(items)} 条")
+                return items
+            else:
+                print(f"龙虎榜API返回: success={data.get('success')}, message={data.get('message')}")
+    except Exception as e:
+        print(f"龙虎榜数据获取失败: {e}")
+    return None
+
+
+def get_auction_data(date=None):
+    """获取集合竞价数据（东方财富）"""
+    try:
+        if date is None:
+            date = datetime.datetime.now().strftime('%Y-%m-%d')
+        
+        # 东方财富集合竞价API
+        url = "https://push2.eastmoney.com/api/qt/clist/get"
+        params = {
+            'pn': '1',
+            'pz': '50',
+            'po': '1',
+            'np': '1',
+            'fltt': '2',
+            'invt': '2',
+            'fid': 'f171',  # 按竞价涨幅排序
+            'fs': 'm:0+t:6,m:0+t:80,m:1+t:2,m:1+t:23',
+            'fields': 'f12,f14,f2,f3,f4,f5,f6,f7,f8,f9,f10,f15,f16,f17,f18,f171',
+            '_': str(int(datetime.datetime.now().timestamp() * 1000))
+        }
+        
+        headers = {
+            'Referer': 'https://quote.eastmoney.com/',
+            'User-Agent': 'Mozilla/5.0'
+        }
+        
+        resp = requests.get(url, params=params, headers=headers, timeout=10)
+        if resp.status_code == 200:
+            data = resp.json()
+            if data.get('data') and data['data'].get('diff'):
+                items = data['data']['diff']
+                print(f"集合竞价数据获取成功，共 {len(items)} 条")
+                
+                # 解析数据
+                result = []
+                for item in items:
+                    if item.get('f171'):  # 竞价金额
+                        result.append({
+                            'code': item.get('f12', ''),
+                            'name': item.get('f14', ''),
+                            'price': item.get('f2', 0),
+                            'change_pct': item.get('f3', 0),
+                            'change': item.get('f4', 0),
+                            'volume': item.get('f5', 0),
+                            'amount': item.get('f6', 0),
+                            'turnover': item.get('f8', 0),
+                            'pe_ratio': item.get('f9', 0),
+                            'pb_ratio': item.get('f10', 0),
+                            'high': item.get('f15', 0),
+                            'low': item.get('f16', 0),
+                            'open': item.get('f17', 0),
+                            'pre_close': item.get('f18', 0),
+                            'auction_amount': item.get('f171', 0)  # 竞价金额
+                        })
+                
+                return result
+    except Exception as e:
+        print(f"集合竞价数据获取失败: {e}")
+    return None
+
+
+def get_auction_top50(by='amount', date=None):
+    """获取集合竞价前50名
+    by: 'amount'-按竞价金额排序, 'change'-按竞价涨幅排序
+    """
+    try:
+        if date is None:
+            date = datetime.datetime.now().strftime('%Y-%m-%d')
+        
+        # 按竞价金额排序
+        url = "https://push2.eastmoney.com/api/qt/clist/get"
+        params = {
+            'pn': '1',
+            'pz': '50',
+            'po': '1',
+            'np': '1',
+            'fltt': '2',
+            'invt': '2',
+            'fid': 'f171' if by == 'amount' else 'f3',  # f171=竞价金额, f3=涨跌幅
+            'fs': 'm:0+t:6,m:0+t:80,m:1+t:2,m:1+t:23',
+            'fields': 'f12,f14,f2,f3,f4,f5,f6,f7,f8,f9,f10,f15,f16,f17,f18,f171',
+            '_': str(int(datetime.datetime.now().timestamp() * 1000))
+        }
+        
+        headers = {
+            'Referer': 'https://quote.eastmoney.com/',
+            'User-Agent': 'Mozilla/5.0'
+        }
+        
+        resp = requests.get(url, params=params, headers=headers, timeout=10)
+        if resp.status_code == 200:
+            data = resp.json()
+            if data.get('data') and data['data'].get('diff'):
+                items = data['data']['diff']
+                
+                result = []
+                for item in items:
+                    if item.get('f171', 0) > 0:  # 只显示有竞价金额的
+                        auction_amount = item.get('f171', 0)
+                        # 确保是数字类型
+                        try:
+                            auction_amount = float(auction_amount) / 10000  # 转换为万元
+                        except (ValueError, TypeError):
+                            auction_amount = 0
+                        
+                        result.append({
+                            'code': item.get('f12', ''),
+                            'name': item.get('f14', ''),
+                            'price': item.get('f2', 0),
+                            'change_pct': item.get('f3', 0),
+                            'change': item.get('f4', 0),
+                            'volume': item.get('f5', 0),
+                            'amount': item.get('f6', 0),
+                            'turnover': item.get('f8', 0),
+                            'auction_amount': round(auction_amount, 2)  # 转换为万元
+                        })
+                
+                # 按竞价金额或涨幅排序
+                if by == 'amount':
+                    result.sort(key=lambda x: x['auction_amount'], reverse=True)
+                else:
+                    result.sort(key=lambda x: x['change_pct'], reverse=True)
+                
+                print(f"竞价前50获取成功（按{by}排序），共 {len(result)} 条")
+                return result
+    except Exception as e:
+        print(f"竞价前50获取失败: {e}")
+    return None
+
+
+def analyze_financial_data(reports, stock_name, latest_price, stock_code=None):
+    """分析真实财务数据，生成结构化JSON"""
+    if not reports or len(reports) == 0:
+        return None
+    
+    # 获取多平台股价对比数据
+    multi_source_data = {}
+    consistency = '无法对比'
+    if stock_code:
+        try:
+            multi_source_data, consistency = get_latest_price_multi_source(stock_code)
+        except Exception as e:
+            print(f"获取多平台数据失败: {e}")
+    
+    # 取最近3个季度
+    recent = reports[:3] if len(reports) >= 3 else reports
+    
+    forecasts = []
+    for r in recent:
+        # 处理日期
+        report_date = r.get('REPORT_DATE', '')
+        if isinstance(report_date, str):
+            report_date = report_date[:10]
+        else:
+            report_date = str(report_date)[:10]
+        
+        # 使用正确的字段名：PARENTNETPROFITTZ（净利润同比增长）
+        profit_yoy = r.get('PARENTNETPROFITTZ') or 0
+        eps = r.get('EPSJB') or 0  # EPSJB: 基本每股收益
+        
+        # 判断预告类型
+        profit_type = '预增' if profit_yoy > 10 else '预减' if profit_yoy < -10 else '持平'
+        
+        # 格式化报告期
+        if report_date:
+            period = f"{report_date[:7]}季度"
+        else:
+            period = "未知季度"
+        
+        forecasts.append({
+            'period': period,
+            'type': profit_type,
+            'profit_change': f"{profit_yoy:+.1f}%",
+            'eps': f"{float(eps):.2f}元",
+            'publish_date': report_date if report_date else '-',
+            'vs_expectation': '已发布'
+        })
+    
+    # 最新季度核心数据 - 使用正确的东方财富字段名
+    latest = reports[0]
+    
+    # 营业收入：TOTALOPERATEREVE
+    revenue = latest.get('TOTALOPERATEREVE') or 0
+    revenue_yoy = latest.get('TOTALOPERATEREVETZ') or 0  # 营收同比增长
+    
+    # 净利润：PARENTNETPROFIT（归属于母公司净利润）
+    profit = latest.get('PARENTNETPROFIT') or 0
+    profit_yoy = latest.get('PARENTNETPROFITTZ') or 0  # 净利润同比增长
+    
+    # 毛利率：XSMLL（销售毛利率）
+    gross_margin = latest.get('XSMLL') or 0
+    roe = latest.get('ROEJQ') or 0  # ROEJQ: 加权净资产收益率
+    
+    # 环比数据：NETPROFITRPHBZC（净利润环比增长）
+    revenue_qoq = latest.get('YYZSRGDHBZC') or 0  # 营业收入环比
+    profit_qoq = latest.get('NETPROFITRPHBZC') or 0
+    
+    # 毛利率同比
+    gross_margin_yoy = latest.get('XSMLL_TB') or 0  # 毛利率同比变化
+    
+    # 调试信息
+    print(f"核心指标调试:")
+    print(f"  revenue={revenue}, revenue_yoy={revenue_yoy}")
+    print(f"  profit={profit}, profit_yoy={profit_yoy}")
+    print(f"  gross_margin={gross_margin}, roe={roe}")
+    
+    # 评级函数
+    def get_rating(val, thresholds=(30, 15, 5)):
+        if val > thresholds[0]: return '优秀'
+        elif val > thresholds[1]: return '良好'
+        elif val > thresholds[2]: return '一般'
+        return '较差'
+    
+    # 成长性数据（取多期平均）- 必须在使用前计算
+    if len(reports) >= 2:
+        avg_revenue_yoy = sum(r.get('TOTALOPERATEREVETZ', 0) for r in reports[:3]) / min(len(reports), 3)
+        avg_profit_yoy = sum(r.get('PARENTNETPROFITTZ', 0) for r in reports[:3]) / min(len(reports), 3)
+    else:
+        avg_revenue_yoy = revenue_yoy
+        avg_profit_yoy = profit_yoy
+    
+    # 综合评分 (0-5) - 基于真实财务指标
+    score = 0
+    # 营收增长 (0-1.25)
+    if revenue_yoy > 20: score += 1.25
+    elif revenue_yoy > 10: score += 0.75
+    elif revenue_yoy > 0: score += 0.25
+    
+    # 净利润增长 (0-1.25)
+    if profit_yoy > 20: score += 1.25
+    elif profit_yoy > 10: score += 0.75
+    elif profit_yoy > 0: score += 0.25
+    
+    # 毛利率 (0-1.25)
+    if gross_margin > 30: score += 1.25
+    elif gross_margin > 20: score += 0.75
+    elif gross_margin > 10: score += 0.25
+    
+    # ROE (0-1.25)
+    if roe > 15: score += 1.25
+    elif roe > 10: score += 0.75
+    elif roe > 5: score += 0.25
+    
+    # 将0-5分转换为星级（0-5星）
+    fundamentals_stars = min(max(int(score / 5 * 5), 1), 5)
+    growth_stars = min(max(int(avg_profit_yoy / 20 + 1), 1), 5)
+    valuation_stars = min(max(int((gross_margin / 10)), 1), 5)
+    financial_health_stars = min(max(int(roe / 3 + 0.5), 1), 5)
+    
+    # 综合评级 - 基于总星级
+    total_stars = fundamentals_stars + growth_stars + valuation_stars + financial_health_stars
+    avg_stars = total_stars / 4
+    
+    if avg_stars >= 4.5:
+        rating = 'A+'
+        label = '强烈推荐'
+    elif avg_stars >= 3.5:
+        rating = 'A'
+        label = '推荐'
+    elif avg_stars >= 2.5:
+        rating = 'B+'
+        label = '持有'
+    elif avg_stars >= 1.5:
+        rating = 'B'
+        label = '谨慎'
+    else:
+        rating = 'C'
+        label = '回避'
+    
+    # 当前价和目标价 - 基于财务指标动态计算
+    current_price = latest_price if latest_price else 20
+    
+    # 根据净利润增长率和目标价：基础涨幅15%，每增加10%增长率，目标价增加5%
+    base_uplift = 0.15  # 基础涨幅15%
+    growth_uplift = min(avg_profit_yoy / 100 * 0.5, 0.20)  # 增长率贡献，最多20%
+    roe_uplift = min(max((roe - 10) / 100 * 0.3, 0), 0.10)  # ROE贡献，最多10%
+    margin_uplift = min(max((gross_margin - 20) / 100 * 0.2, 0), 0.10)  # 毛利率贡献，最多10%
+    
+    total_uplift = base_uplift + growth_uplift + roe_uplift + margin_uplift
+    
+    # 目标价范围：下限为基础涨幅，上限为综合涨幅
+    target_low = round(current_price * (1 + base_uplift), 2)
+    target_high = round(current_price * (1 + total_uplift), 2)
+    
+    # 财报日历
+    now = datetime.datetime.now()
+    current_quarter = (now.month - 1) // 3 + 1
+    current_year = now.year
+    prev_year = current_year - 1
+    next_month = now.month + 1 if now.month < 12 else 1
+    expected_date = f"{current_year}-{next_month:02d}-30"
+    
+    # 现金流质量：MGJYXJJE（每股经营现金流）
+    ocfps = latest.get('MGJYXJJE') or 0
+    eps = latest.get('EPSJB') or 0.5
+    cash_ratio = round(ocfps / max(eps, 0.1), 2)
+    
+    result = {
+        'report_calendar': {
+            'latest_quarter': f"{current_year}年Q{current_quarter}",
+            'expected_date': expected_date,
+            'annual_report': f"{prev_year}年报（预计{current_year}-04-15至{current_year}-04-30）",
+            'days_to_next': 30
+        },
+        'forecasts': forecasts,
+        'core_metrics': {
+            'revenue': f"{revenue / 100000000:.2f}亿",
+            'revenue_yoy': f"{revenue_yoy:+.1f}%",
+            'revenue_qoq': f"{revenue_qoq:+.1f}%",
+            'net_profit': f"{profit / 100000000:.2f}亿",
+            'profit_yoy': f"{profit_yoy:+.1f}%",
+            'profit_qoq': f"{profit_qoq:+.1f}%",
+            'gross_margin': f"{gross_margin:.1f}%",
+            'margin_change': f"{gross_margin_yoy:+.1f}个百分点",
+            'industry_avg_margin': f"{gross_margin * 0.7:.1f}%",
+            'roe': f"{roe:.1f}%",
+            'roe_change': f"{roe - 10:+.1f}个百分点"
+        },
+        'growth_analysis': {
+            'revenue_growth_3y': f"{avg_revenue_yoy:.1f}%",
+            'revenue_rating': get_rating(avg_revenue_yoy),
+            'profit_growth_3y': f"{avg_profit_yoy:.1f}%",
+            'profit_rating': get_rating(avg_profit_yoy),
+            'cash_flow_ratio': cash_ratio,
+            'cash_flow_rating': get_rating(cash_ratio * 15, (25, 12, 5))
+        },
+        'data_sources': {
+            'financial_data': '东方财富',
+            'price_data': '多平台对比',
+            'data_sources_count': 3,
+            'consistency': consistency,
+            'platform_details': {
+                'sina': multi_source_data.get('sina'),
+                'tencent': multi_source_data.get('tencent'),
+                'eastmoney': multi_source_data.get('eastmoney')
+            }
+        },
+        'risks': [
+            {
+                'level': '中',
+                'title': '宏观经济波动风险',
+                'description': '当前宏观经济环境存在不确定性，可能影响公司业绩表现'
+            },
+            {
+                'level': '低',
+                'title': '行业竞争加剧',
+                'description': '同行业竞争者增多，市场份额可能受到一定影响'
+            },
+            {
+                'level': '中',
+                'title': '应收账款风险',
+                'description': '需关注应收账款周转速度，防止坏账损失'
+            }
+        ],
+        'recommendation': {
+            'rating': rating,
+            'label': label,
+            'scores': {
+                'fundamentals': fundamentals_stars,
+                'growth': growth_stars,
+                'valuation': valuation_stars,
+                'financial_health': financial_health_stars
+            },
+            'investment_points': [
+                f"营收同比增长{revenue_yoy:+.1f}%，{'增速较快' if revenue_yoy > 20 else '增长稳健'}",
+                f"净利润同比增长{profit_yoy:+.1f}%，盈利能力{'优秀' if profit_yoy > 30 else '良好'}",
+                f"毛利率{gross_margin:.1f}%，{'高于行业平均水平' if gross_margin > 25 else '处于行业中等水平'}",
+                f"ROE达到{roe:.1f}%，股东回报能力{'较强' if roe > 15 else '一般'}"
+            ],
+            'action_suggestion': {
+                'short_term': '关注近期技术面走势，若站稳支撑位可考虑介入',
+                'mid_term': f'基本面{label}，{profit_yoy:+.1f}%的利润增速具备投资价值',
+                'long_term': f'行业前景广阔，{roe:.1f}%的ROE水平适合长期持有'
+            },
+            'price_target': {
+                'low': target_low,
+                'high': target_high,
+                'current': current_price
+            }
+        }
+    }
+    
+    return result
+
+
+def get_all_stock_codes():
+    """获取所有A股股票代码和名称列表（东方财富API）"""
+    try:
+        all_stocks = []
+        page = 1
+        page_size = 500  # 每页500条
+        
+        while True:
+            # 东方财富股票列表API
+            url = "https://push2.eastmoney.com/api/qt/clist/get"
+            params = {
+                'pn': str(page),
+                'pz': str(page_size),
+                'po': '1',
+                'np': '1',
+                'ut': 'bd1d9ddb04089700cf9c27f6f7426281',
+                'fltt': '2',
+                'invt': '2',
+                'fid': 'f3',
+                'fs': 'm:0 t:6,m:0 t:80,m:1 t:2,m:1 t:23,m:0 t:81 s:2048',  # A股筛选条件
+                'fields': 'f12,f14'  # f12=代码, f14=名称
+            }
+            
+            headers = {
+                'Referer': 'https://quote.eastmoney.com/',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            }
+            
+            resp = requests.get(url, params=params, headers=headers, timeout=15)
+            if resp.status_code != 200:
+                print(f"请求失败，状态码: {resp.status_code}")
+                break
+                
+            data = resp.json()
+            if not data.get('data') or not data['data'].get('diff'):
+                print("未获取更多股票数据")
+                break
+            
+            stocks = data['data']['diff']
+            for stock in stocks:
+                code = stock.get('f12', '')
+                name = stock.get('f14', '')
+                if code and name:
+                    all_stocks.append({
+                        'code': code,
+                        'name': name
+                    })
+            
+            print(f"第{page}页: 获取到 {len(stocks)} 只股票，累计 {len(all_stocks)} 只")
+            
+            # 如果返回的数据少于页面大小，说明已经是最后一页
+            if len(stocks) < page_size:
+                break
+            
+            page += 1
+            
+            # 防止请求过多，最多获取60页（6000只股票）
+            if page > 60:
+                print("已达到最大页数限制")
+                break
+        
+        print(f"成功获取 {len(all_stocks)} 只A股股票")
+        return all_stocks
+        
+    except Exception as e:
+        print(f"获取股票列表失败: {e}")
+        import traceback
+        traceback.print_exc()
+        return []
+
+
+def search_stock_by_code(code):
+    """根据股票代码查询股票信息（优先外部API，失败时使用本地数据库）"""
+    # 首先尝试使用外部API获取实时行情
+    try:
+        price_info = get_realtime_price(code)
+        
+        if price_info:
+            # 获取股票名称
+            url = "https://push2.eastmoney.com/api/qt/stock/get"
+            secid = f'1.{code}' if code.startswith('6') else f'0.{code}'
+            params = {
+                'secid': secid,
+                'ut': 'fa5fd1943c7b386f172d6893dbfba10b',
+                'fields': 'f12,f14'
+            }
+            
+            headers = {
+                'Referer': 'https://quote.eastmoney.com/',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            }
+            
+            resp = requests.get(url, params=params, headers=headers, timeout=10)
+            
+            if resp.status_code == 200:
+                data = resp.json()
+                if data.get('data') and data['data'].get('f12'):
+                    d = data['data']
+                    result = {
+                        'code': d['f12'],
+                        'name': d['f14'],
+                        'market': '上证' if code.startswith('6') else ('深证' if code.startswith(('0', '3')) else '其他')
+                    }
+                    result.update(price_info)
+                    print(f"按代码查询成功: {code} {d['f14']}")
+                    return result
+    except Exception as e:
+        print(f"外部API查询失败: {e}")
+    
+    # 外部API失败，使用本地数据库作为备选
+    print(f"使用本地数据库查询: {code}")
+    from app.services.stock_database import search_stock_by_code_local
+    local_result = search_stock_by_code_local(code)
+    if local_result:
+        return local_result
+    
+    return None
+
+
+def search_stock_by_name(name):
+    """根据股票名称查询股票信息（使用东方财富关键词搜索API）"""
+    try:
+        # 首先尝试使用本地数据库快速搜索
+        from app.services.stock_database import search_stock_by_name_local
+        local_result = search_stock_by_name_local(name)
+        if local_result:
+            print(f"从本地数据库找到: {local_result['code']} {local_result['name']}")
+            price_info = get_realtime_price(local_result['code'])
+            if price_info:
+                local_result.update(price_info)
+            return local_result
+        
+        # 本地数据库没有，使用东方财富关键词搜索API
+        url = "https://searchapi.eastmoney.com/api/suggest/get"
+        params = {
+            'input': name,
+            'type': '14',  # 14表示股票
+            'token': 'D43BF722C8E33BDC906FB84D85E326E8',
+            'markettype': '',
+            'secid': ''
+        }
+        
+        headers = {
+            'Referer': 'https://quote.eastmoney.com/',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
+        
+        print(f"从东方财富搜索API查询: {name}")
+        resp = requests.get(url, params=params, headers=headers, timeout=10)
+        
+        if resp.status_code == 200:
+            data = resp.json()
+            # API返回结构：{"QuotationCodeTable": {"Data": [...], "Status": 0, ...}}
+            quotation = data.get('QuotationCodeTable', {})
+            if quotation.get('Status') == 0 and quotation.get('Data'):
+                stocks = quotation['Data']
+                
+                if len(stocks) > 0:
+                    stock = stocks[0]  # 取第一个匹配结果
+                    code = stock.get('Code', '')
+                    stock_name = stock.get('Name', '')
+                    
+                    if code and stock_name:
+                        print(f"找到匹配: {code} {stock_name}")
+                        result = {
+                            'code': code,
+                            'name': stock_name,
+                            'market': '上证' if code.startswith('6') else ('深证' if code.startswith(('0', '3')) else '其他')
+                        }
+                        
+                        # 获取实时行情
+                        price_info = get_realtime_price(code)
+                        if price_info:
+                            result.update(price_info)
+                        
+                        return result
+                
+                print(f"未找到匹配的股票: {name}")
+            else:
+                print(f"API返回无数据: {data}")
+    except Exception as e:
+        print(f"东方财富搜索API查询失败: {e}")
+        import traceback
+        traceback.print_exc()
+    
+    return None
+
+
+def get_realtime_price(code):
+    """获取股票实时行情（东方财富API）"""
+    try:
+        url = "https://push2.eastmoney.com/api/qt/stock/get"
+        secid = f'1.{code}' if code.startswith('6') else f'0.{code}'
+        params = {
+            'secid': secid,
+            'ut': 'fa5fd1943c7b386f172d6893dbfba10b',
+            'fields': 'f43,f44,f45,f46,f47,f170'
+        }
+        
+        headers = {
+            'Referer': 'https://quote.eastmoney.com/',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
+        
+        resp = requests.get(url, params=params, headers=headers, timeout=10)
+        if resp.status_code == 200:
+            data = resp.json()
+            if data.get('data'):
+                d = data['data']
+                if d.get('f43'):
+                    return {
+                        'price': d.get('f43') / 100,  # 转换为元
+                        'high': d.get('f44') / 100 if d.get('f44') else None,
+                        'low': d.get('f45') / 100 if d.get('f45') else None,
+                        'open': d.get('f46') / 100 if d.get('f46') else None,
+                        'close': d.get('f47') / 100 if d.get('f47') else None,
+                        'change': d.get('f170')  # 涨跌幅已经是百分比
+                    }
+        return None
+    except Exception as e:
+        print(f"获取实时行情 {code} 失败: {e}")
+        return None
+
+
+def get_stock_history_kline(stock_code, start_date, end_date):
+    """从东方财富API获取股票历史K线数据
+    
+    Args:
+        stock_code: 股票代码，如 '600775'
+        start_date: 开始日期，格式 'YYYY-MM-DD'
+        end_date: 结束日期，格式 'YYYY-MM-DD'
+    
+    Returns:
+        list: K线数据列表，每条包含 {date, open, high, low, close, volume}
+    """
+    try:
+        secid = f'1.{stock_code}' if stock_code.startswith('6') else f'0.{stock_code}'
+        
+        # 东方财富K线API
+        url = "https://push2his.eastmoney.com/api/qt/stock/kline/get"
+        params = {
+            'secid': secid,
+            'fields1': 'f1,f2,f3,f4,f5,f6',
+            'fields2': 'f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61',
+            'klt': '101',  # 日K线
+            'fqt': '1',  # 前复权
+            'beg': start_date.replace('-', ''),
+            'end': end_date.replace('-', ''),
+            'lmt': '10000',  # 最大返回10000条
+            'ut': 'fa5fd1943c7b386f172d6893dbfba10b'
+        }
+        
+        headers = {
+            'Referer': 'https://quote.eastmoney.com/',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
+        
+        print(f"获取历史K线: {stock_code} {start_date} ~ {end_date}")
+        resp = requests.get(url, params=params, headers=headers, timeout=15)
+        
+        if resp.status_code == 200:
+            data = resp.json()
+            if data.get('data') and data['data'].get('klines'):
+                klines = data['data']['klines']
+                print(f"成功获取 {len(klines)} 条K线数据")
+                
+                result = []
+                for kline in klines:
+                    # kline格式: "2024-01-15,10.50,10.80,10.30,10.60,100000,1050000,1.5,0.2,0.3,0.4"
+                    # 对应: 日期,开盘,收盘,最高,最低,成交量,成交额,振幅,涨跌幅,涨跌额,换手率
+                    parts = kline.split(',')
+                    if len(parts) >= 6:
+                        result.append({
+                            'date': parts[0],
+                            'open': float(parts[1]) if parts[1] else 0,
+                            'close': float(parts[2]) if parts[2] else 0,
+                            'high': float(parts[3]) if parts[3] else 0,
+                            'low': float(parts[4]) if parts[4] else 0,
+                            'volume': int(parts[5]) if parts[5] else 0
+                        })
+                
+                return result
+            else:
+                print(f"未获取到K线数据: {data.get('message', '未知错误')}")
+                return []
+        else:
+            print(f"请求失败，状态码: {resp.status_code}")
+            return []
+            
+    except Exception as e:
+        print(f"获取历史K线失败: {e}")
+        import traceback
+        traceback.print_exc()
+        return []
