@@ -1,0 +1,534 @@
+/* =========================================
+   苹果 macOS 风格弹窗设计系统
+   Glassmorphism + Modern UI
+   ========================================= */
+
+/* 毛玻璃遮罩层 */
+.apple-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fadeIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* 弹窗主体 */
+.apple-modal {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(40px) saturate(200%);
+  -webkit-backdrop-filter: blur(40px) saturate(200%);
+  border-radius: 24px;
+  padding: 0;
+  width: 520px;
+  max-width: 92vw;
+  max-height: 85vh;
+  overflow-y: auto;
+  box-shadow: 
+    0 20px 60px rgba(0, 0, 0, 0.3),
+    0 0 0 1px rgba(255, 255, 255, 0.1) inset,
+    0 1px 0 rgba(255, 255, 255, 0.6) inset;
+  animation: slideUpScale 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  position: relative;
+}
+
+@keyframes slideUpScale {
+  from {
+    opacity: 0;
+    transform: translateY(30px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* 弹窗头部 */
+.apple-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 28px 32px 24px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 1) 0%, rgba(250, 250, 252, 0.8) 100%);
+  border-radius: 24px 24px 0 0;
+}
+
+.apple-modal-title {
+  display: flex;
+  gap: 16px;
+  flex: 1;
+}
+
+.apple-modal-icon {
+  width: 48px;
+  height: 48px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+  flex-shrink: 0;
+}
+
+.apple-modal-header h3 {
+  margin: 0 0 4px 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: #1a1a1a;
+  letter-spacing: -0.3px;
+}
+
+.apple-modal-header p {
+  margin: 0;
+  font-size: 13px;
+  color: #8e8e93;
+  line-height: 1.4;
+}
+
+.apple-modal-close {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0, 0, 0, 0.05);
+  color: #8e8e93;
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  flex-shrink: 0;
+}
+
+.apple-modal-close:hover {
+  background: rgba(0, 0, 0, 0.1);
+  color: #1a1a1a;
+  transform: scale(1.1);
+}
+
+/* 表单组 */
+.apple-form-group {
+  padding: 24px 32px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.04);
+}
+
+.apple-form-group:last-of-type {
+  border-bottom: none;
+}
+
+/* 标签样式 */
+.apple-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin-bottom: 10px;
+  letter-spacing: -0.2px;
+}
+
+.label-icon {
+  font-size: 16px;
+  filter: grayscale(0.3);
+}
+
+.label-optional {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 500;
+  color: #8e8e93;
+  background: rgba(0, 0, 0, 0.04);
+  padding: 2px 8px;
+  border-radius: 6px;
+}
+
+/* 输入框基础样式 - 药丸形状 */
+.apple-input {
+  width: 100%;
+  padding: 12px 18px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 50px;
+  font-size: 14px;
+  background: rgba(255, 255, 255, 0.8);
+  color: #1a1a1a;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  outline: none;
+  font-family: inherit;
+}
+
+.apple-input:hover {
+  border-color: rgba(0, 0, 0, 0.15);
+  background: rgba(255, 255, 255, 1);
+}
+
+.apple-input:focus {
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15);
+  background: rgba(255, 255, 255, 1);
+}
+
+.apple-input::placeholder {
+  color: #c7c7cc;
+}
+
+/* 文本域 */
+.apple-textarea {
+  resize: vertical;
+  min-height: 80px;
+  line-height: 1.5;
+}
+
+/* 下拉选择器 - 药丸形状 */
+.apple-dropdown-wrapper {
+  position: relative;
+  z-index: 9999;
+}
+
+.apple-select-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 18px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 50px;
+  background: rgba(255, 255, 255, 0.8);
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  min-height: 48px;
+}
+
+.apple-select-trigger:hover {
+  border-color: rgba(0, 0, 0, 0.15);
+  background: rgba(255, 255, 255, 1);
+}
+
+.apple-select-trigger:active {
+  transform: scale(0.98);
+}
+
+.select-content {
+  flex: 1;
+  font-size: 14px;
+  color: #1a1a1a;
+}
+
+.placeholder {
+  color: #c7c7cc;
+}
+
+.selected-stock {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.stock-code {
+  font-weight: 600;
+  color: #667eea;
+  font-family: 'SF Mono', 'Consolas', monospace;
+}
+
+.stock-name {
+  color: #1a1a1a;
+}
+
+.dropdown-arrow {
+  font-size: 10px;
+  color: #8e8e93;
+  transition: transform 0.2s;
+}
+
+/* 下拉菜单 */
+.apple-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  min-width: 320px;
+  max-width: 400px;
+  background: rgba(255, 255, 255, 0.98);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 16px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+  overflow: visible;
+  z-index: 9999;
+  animation: dropdownSlide 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes dropdownSlide {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 搜索框 */
+.dropdown-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  background: rgba(250, 250, 252, 0.5);
+}
+
+.search-icon {
+  font-size: 16px;
+  opacity: 0.5;
+}
+
+.search-input {
+  border: none;
+  background: transparent;
+  padding: 8px 0;
+}
+
+.search-input:focus {
+  box-shadow: none;
+}
+
+/* 下拉列表 */
+.dropdown-list {
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.dropdown-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.dropdown-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.dropdown-list::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 3px;
+}
+
+.dropdown-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.2);
+}
+
+/* 下拉项 */
+.apple-dropdown-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  cursor: pointer;
+  transition: all 0.15s;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.03);
+}
+
+.apple-dropdown-item:last-child {
+  border-bottom: none;
+}
+
+.apple-dropdown-item:hover {
+  background: rgba(102, 126, 234, 0.08);
+}
+
+.apple-dropdown-item.active {
+  background: linear-gradient(90deg, rgba(102, 126, 234, 0.12) 0%, rgba(118, 75, 162, 0.08) 100%);
+}
+
+.item-left {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.item-code {
+  font-weight: 600;
+  color: #667eea;
+  font-family: 'SF Mono', 'Consolas', monospace;
+  font-size: 13px;
+}
+
+.item-name {
+  color: #1a1a1a;
+  font-size: 14px;
+}
+
+.item-tag {
+  font-size: 11px;
+  color: #8e8e93;
+  background: rgba(0, 0, 0, 0.04);
+  padding: 3px 10px;
+  border-radius: 8px;
+  font-weight: 500;
+}
+
+/* 统计数据 */
+.dropdown-stats {
+  padding: 10px 16px;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+  font-size: 12px;
+  color: #8e8e93;
+  text-align: center;
+  background: rgba(250, 250, 252, 0.5);
+}
+
+.dropdown-stats strong {
+  color: #667eea;
+  font-weight: 600;
+}
+
+/* 加载状态 */
+.apple-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 32px;
+  color: #8e8e93;
+  font-size: 13px;
+}
+
+.loading-spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid rgba(0, 0, 0, 0.06);
+  border-top-color: #667eea;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* 空状态 */
+.apple-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  color: #8e8e93;
+  font-size: 13px;
+  text-align: center;
+}
+
+.empty-icon {
+  font-size: 32px;
+  margin-bottom: 12px;
+  opacity: 0.6;
+}
+
+.empty-hint {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #667eea;
+  font-weight: 500;
+}
+
+/* 底部按钮区域 */
+.apple-modal-actions,
+.apple-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 24px 32px 28px;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+  background: linear-gradient(180deg, rgba(250, 250, 252, 0.5) 0%, rgba(255, 255, 255, 0.8) 100%);
+  border-radius: 0 0 24px 24px;
+}
+
+/* 按钮基础样式 */
+.apple-btn {
+  padding: 12px 24px;
+  border: none;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  letter-spacing: -0.2px;
+}
+
+.btn-icon {
+  font-size: 16px;
+}
+
+/* 取消按钮 */
+.apple-btn-cancel {
+  background: rgba(0, 0, 0, 0.05);
+  color: #1a1a1a;
+}
+
+.apple-btn-cancel:hover {
+  background: rgba(0, 0, 0, 0.1);
+  transform: translateY(-1px);
+}
+
+.apple-btn-cancel:active {
+  transform: translateY(0) scale(0.98);
+}
+
+/* 提交按钮 */
+.apple-btn-submit {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+.apple-btn-submit:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+}
+
+.apple-btn-submit:active {
+  transform: translateY(0) scale(0.98);
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+}
+
+/* 响应式设计 */
+@media (max-width: 600px) {
+  .apple-modal {
+    width: 95vw;
+    max-height: 90vh;
+  }
+  
+  .apple-modal-header {
+    padding: 20px 24px 16px;
+  }
+  
+  .apple-form-group {
+    padding: 20px 24px;
+  }
+  
+  .apple-modal-actions,
+  .apple-modal-footer {
+    padding: 20px 24px 24px;
+  }
+  
+  .apple-btn {
+    flex: 1;
+    justify-content: center;
+  }
+}
