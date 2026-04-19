@@ -2,14 +2,17 @@
 价格数据管理路由蓝图
 """
 from flask import Blueprint, request, jsonify
+from flask_jwt_extended import jwt_required
 from app.models.models import db, Stock, StockPrice
 from app.services.financial_api import get_stock_history_kline
+from app.routes.auth_routes import admin_required
 import datetime
 
 price_bp = Blueprint('prices', __name__, url_prefix='/api/stocks')
 
 
 @price_bp.route('/<int:stock_id>/prices', methods=['GET'])
+@jwt_required()
 def get_stock_prices(stock_id):
     """获取股票历史价格数据（支持日K/周K/月K）"""
     stock = Stock.query.get_or_404(stock_id)
@@ -105,6 +108,8 @@ def get_stock_prices(stock_id):
 
 
 @price_bp.route('/<int:stock_id>/prices', methods=['POST'])
+@jwt_required()
+@admin_required
 def add_stock_price(stock_id):
     """添加股票价格数据(单条)"""
     print(f"\n=== 添加价格数据请求 ===")
@@ -157,6 +162,8 @@ def add_stock_price(stock_id):
 
 
 @price_bp.route('/<int:stock_id>/prices/batch', methods=['POST'])
+@jwt_required()
+@admin_required
 def batch_add_stock_prices(stock_id):
     """批量添加股票价格数据"""
     stock = Stock.query.get_or_404(stock_id)
@@ -203,6 +210,8 @@ def batch_add_stock_prices(stock_id):
 
 
 @price_bp.route('/<int:stock_id>/prices/fetch_history', methods=['POST'])
+@jwt_required()
+@admin_required
 def fetch_history_prices(stock_id):
     """从网络获取股票历史K线数据并保存到数据库"""
     stock = Stock.query.get_or_404(stock_id)
@@ -277,6 +286,7 @@ def fetch_history_prices(stock_id):
 
 
 @price_bp.route('/<int:stock_id>/indicators', methods=['GET'])
+@jwt_required()
 def get_indicators(stock_id):
     """计算并返回股票的技术指标（数组格式适配图表，支持日K/周K/月K）"""
     stock = Stock.query.get_or_404(stock_id)
@@ -632,6 +642,8 @@ def get_indicators(stock_id):
 
 
 @price_bp.route('/batch_fetch_history', methods=['POST'])
+@jwt_required()
+@admin_required
 def batch_fetch_history_prices():
     """批量获取多只股票的历史K线数据"""
     data = request.json

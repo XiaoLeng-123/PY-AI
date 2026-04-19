@@ -2,6 +2,7 @@
 市场数据路由：龙虎榜、集合竞价等
 """
 from flask import Blueprint, request, jsonify
+from flask_jwt_extended import jwt_required
 from datetime import datetime
 
 market_bp = Blueprint('market', __name__, url_prefix='/api/market')
@@ -9,6 +10,7 @@ market_bp = Blueprint('market', __name__, url_prefix='/api/market')
 # ==================== 龙虎榜 ====================
 
 @market_bp.route('/longhubang', methods=['GET'])
+@jwt_required()
 def get_longhubang():
     """获取龙虎榜数据"""
     date = request.args.get('date')
@@ -124,6 +126,7 @@ def get_longhubang():
 # ==================== 集合竞价 ====================
 
 @market_bp.route('/auction', methods=['GET'])
+@jwt_required()
 def get_auction_data():
     """获取集合竞价数据"""
     import time

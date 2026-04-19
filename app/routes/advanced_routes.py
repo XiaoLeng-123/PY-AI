@@ -1,8 +1,10 @@
 """
-自选股、预警、板块分析、资金流向、交易信号等高级功能路由
+自选股、预警、持仓、板块分析、资金流向、交易信号等高级功能路由
 """
 from flask import Blueprint, request, jsonify
-from app.models.models import db, Stock, StockPrice, Watchlist, StockAlert
+from flask_jwt_extended import jwt_required, get_jwt_identity
+from app.models.models import db, Stock, StockPrice, Portfolio, Watchlist, StockAlert
+from app.services.financial_api import get_realtime_price
 from datetime import datetime, timedelta
 
 advanced_bp = Blueprint('advanced', __name__, url_prefix='/api/advanced')
@@ -10,11 +12,12 @@ advanced_bp = Blueprint('advanced', __name__, url_prefix='/api/advanced')
 # ==================== 自选股管理 ====================
 
 @advanced_bp.route('/watchlist', methods=['GET'])
+@jwt_required()
 def get_watchlist():
-    """获取自选股列表"""
+    """获取当前用户的自选股列表"""
+    current_user_id = get_jwt_identity()
     group = request.args.get('group')
-    query = Watchlist.query
-    
+    query = Watchlist.query.filter_by(user_id=current_user_id)
     if group:
         query = query.filter_by(group_name=group)
     
@@ -42,22 +45,20 @@ def get_watchlist():
     return jsonify(result)
 
 @advanced_bp.route('/watchlist', methods=['POST'])
+@jwt_required()
 def add_to_watchlist():
     """添加自选股"""
+    current_user_id = get_jwt_identity()
     data = request.json
     stock_id = data.get('stock_id')
     group_name = data.get('group_name', '默认分组')
     notes = data.get('notes', '')
-    
-    # 检查是否已存在
-    existing = Watchlist.query.filter_by(stock_id=stock_id, group_name=group_name).first()
+    existing = Watchlist.query.filter_by(user_id=current_user_id, stock_id=stock_id, group_name=group_name).first()
     if existing:
         return jsonify({'error': '该股票已在自选股中'}), 400
-    
     watchlist_item = Watchlist(
-        stock_id=stock_id,
-        group_name=group_name,
-        notes=notes
+        user_id=current_user_id, stock_id=stock_id,
+        group_name=group_name, notes=notes
     )
     db.session.add(watchlist_item)
     db.session.commit()
@@ -65,27 +66,34 @@ def add_to_watchlist():
     return jsonify({'message': '添加成功', 'id': watchlist_item.id}), 201
 
 @advanced_bp.route('/watchlist/<int:id>', methods=['DELETE'])
+@jwt_required()
 def remove_from_watchlist(id):
     """删除自选股"""
-    item = Watchlist.query.get_or_404(id)
+    current_user_id = get_jwt_identity()
+    item = Watchlist.query.filter_by(id=id, user_id=current_user_id).first()
+    if not item:
+        return jsonify({'error': '自选股不存在或无权操作'}), 404
     db.session.delete(item)
     db.session.commit()
     return jsonify({'message': '删除成功'})
 
 @advanced_bp.route('/watchlist/groups', methods=['GET'])
+@jwt_required()
 def get_watchlist_groups():
-    """获取所有分组"""
-    groups = db.session.query(Watchlist.group_name).distinct().all()
+    """获取当前用户的所有分组"""
+    current_user_id = get_jwt_identity()
+    groups = db.session.query(Watchlist.group_name).filter_by(user_id=current_user_id).distinct().all()
     return jsonify([g[0] for g in groups])
 
 # ==================== 预警系统 ====================
 
 @advanced_bp.route('/alerts', methods=['GET'])
+@jwt_required()
 def get_alerts():
-    """获取预警列表"""
+    """获取当前用户的预警列表"""
+    current_user_id = get_jwt_identity()
     stock_id = request.args.get('stock_id')
-    query = StockAlert.query
-    
+    query = StockAlert.query.filter_by(user_id=current_user_id)
     if stock_id:
         query = query.filter_by(stock_id=stock_id)
     
@@ -110,24 +118,28 @@ def get_alerts():
     return jsonify(result)
 
 @advanced_bp.route('/alerts', methods=['POST'])
+@jwt_required()
 def create_alert():
     """创建预警"""
+    current_user_id = get_jwt_identity()
     data = request.json
     alert = StockAlert(
-        stock_id=data['stock_id'],
-        alert_type=data['alert_type'],
-        condition=data['condition'],
-        threshold=data['threshold'],
-        is_active=data.get('is_active', True)
+        user_id=current_user_id, stock_id=data['stock_id'],
+        alert_type=data['alert_type'], condition=data['condition'],
+        threshold=data['threshold'], is_active=data.get('is_active', True)
     )
     db.session.add(alert)
     db.session.commit()
     return jsonify({'message': '预警创建成功', 'id': alert.id}), 201
 
 @advanced_bp.route('/alerts/<int:id>', methods=['PUT'])
+@jwt_required()
 def update_alert(id):
     """更新预警"""
-    alert = StockAlert.query.get_or_404(id)
+    current_user_id = get_jwt_identity()
+    alert = StockAlert.query.filter_by(id=id, user_id=current_user_id).first()
+    if not alert:
+        return jsonify({'error': '预警不存在或无权操作'}), 404
     data = request.json
     
     alert.is_active = data.get('is_active', alert.is_active)
@@ -138,9 +150,13 @@ def update_alert(id):
     return jsonify({'message': '更新成功'})
 
 @advanced_bp.route('/alerts/<int:id>', methods=['DELETE'])
+@jwt_required()
 def delete_alert(id):
     """删除预警"""
-    alert = StockAlert.query.get_or_404(id)
+    current_user_id = get_jwt_identity()
+    alert = StockAlert.query.filter_by(id=id, user_id=current_user_id).first()
+    if not alert:
+        return jsonify({'error': '预警不存在或无权操作'}), 404
     db.session.delete(alert)
     db.session.commit()
     return jsonify({'message': '删除成功'})
@@ -198,9 +214,108 @@ def check_alerts():
     
     return jsonify({'triggered': triggered, 'count': len(triggered)})
 
+# ==================== 持仓管理 ====================
+
+@advanced_bp.route('/portfolio', methods=['GET'])
+@jwt_required()
+def get_portfolio():
+    """获取当前用户的持仓列表"""
+    current_user_id = get_jwt_identity()
+    positions = Portfolio.query.filter_by(user_id=current_user_id).all()
+    total_market_value = 0
+    total_cost = 0
+    winning_count = 0
+    losing_count = 0
+    position_list = []
+    for pos in positions:
+        stock = pos.stock
+        latest_price = StockPrice.query.filter_by(stock_id=stock.id).order_by(StockPrice.date.desc()).first()
+        current_price = latest_price.close_price if latest_price else pos.avg_cost
+        market_value = current_price * pos.quantity
+        cost_value = pos.avg_cost * pos.quantity
+        profit = market_value - cost_value
+        profit_rate = (profit / cost_value * 100) if cost_value > 0 else 0
+        total_market_value += market_value
+        total_cost += cost_value
+        if profit >= 0:
+            winning_count += 1
+        else:
+            losing_count += 1
+        position_list.append({
+            'id': pos.id, 'stock_id': stock.id, 'stock_code': pos.stock_code,
+            'stock_name': pos.stock_name, 'quantity': pos.quantity,
+            'avg_cost': pos.avg_cost, 'current_price': current_price,
+            'market_value': round(market_value, 2), 'profit': round(profit, 2),
+            'profit_rate': round(profit_rate, 2), 'buy_date': pos.buy_date.isoformat(),
+            'notes': pos.notes
+        })
+    total_profit = total_market_value - total_cost
+    total_profit_rate = (total_profit / total_cost * 100) if total_cost > 0 else 0
+    return jsonify({
+        'positions': position_list,
+        'summary': {
+            'total_market_value': round(total_market_value, 2),
+            'total_cost': round(total_cost, 2),
+            'total_profit': round(total_profit, 2),
+            'total_profit_rate': round(total_profit_rate, 2),
+            'total_positions': len(position_list),
+            'winning_count': winning_count, 'losing_count': losing_count
+        }
+    })
+
+@advanced_bp.route('/portfolio', methods=['POST'])
+@jwt_required()
+def add_portfolio():
+    """添加持仓"""
+    current_user_id = get_jwt_identity()
+    data = request.json
+    stock_id = data.get('stock_id')
+    stock = Stock.query.get_or_404(stock_id)
+    portfolio = Portfolio(
+        user_id=current_user_id, stock_id=stock_id,
+        stock_code=stock.code, stock_name=stock.name,
+        quantity=data['quantity'], avg_cost=data['avg_cost'],
+        buy_date=datetime.strptime(data['buy_date'], '%Y-%m-%d').date() if data.get('buy_date') else datetime.utcnow().date(),
+        notes=data.get('notes', '')
+    )
+    db.session.add(portfolio)
+    db.session.commit()
+    return jsonify({'message': '持仓添加成功', 'id': portfolio.id}), 201
+
+@advanced_bp.route('/portfolio/<int:id>', methods=['PUT'])
+@jwt_required()
+def update_portfolio(id):
+    """更新持仓"""
+    current_user_id = get_jwt_identity()
+    portfolio = Portfolio.query.filter_by(id=id, user_id=current_user_id).first()
+    if not portfolio:
+        return jsonify({'error': '持仓不存在或无权操作'}), 404
+    data = request.json
+    if 'quantity' in data:
+        portfolio.quantity = data['quantity']
+    if 'avg_cost' in data:
+        portfolio.avg_cost = data['avg_cost']
+    if 'notes' in data:
+        portfolio.notes = data['notes']
+    db.session.commit()
+    return jsonify({'message': '持仓更新成功'})
+
+@advanced_bp.route('/portfolio/<int:id>', methods=['DELETE'])
+@jwt_required()
+def delete_portfolio(id):
+    """删除持仓"""
+    current_user_id = get_jwt_identity()
+    portfolio = Portfolio.query.filter_by(id=id, user_id=current_user_id).first()
+    if not portfolio:
+        return jsonify({'error': '持仓不存在或无权操作'}), 404
+    db.session.delete(portfolio)
+    db.session.commit()
+    return jsonify({'message': '持仓删除成功'})
+
 # ==================== 板块分析 ====================
 
 @advanced_bp.route('/sectors/overview', methods=['GET'])
+@jwt_required()
 def get_sectors_overview():
     """获取板块概况 - 使用AkShare新浪行业板块接口（稳定可靠）"""
     try:
@@ -270,6 +385,7 @@ def get_sectors_overview():
         }), 500
 
 @advanced_bp.route('/sectors/rankings', methods=['GET'])
+@jwt_required()
 def get_sector_rankings():
     """获取板块涨跌幅排行 - 使用AkShare新浪行业板块接口（稳定可靠）"""
     try:
@@ -344,6 +460,7 @@ def get_sector_rankings():
         }), 500
 
 @advanced_bp.route('/sectors/<sector_code>/stocks', methods=['GET'])
+@jwt_required()
 def get_sector_stocks(sector_code):
     """获取板块成分股列表"""
     import requests
@@ -430,6 +547,7 @@ def get_sector_stocks(sector_code):
 # ==================== 资金流向分析 ====================
 
 @advanced_bp.route('/moneyflow', methods=['GET'])
+@jwt_required()
 def get_moneyflow():
     """获取资金流向分析"""
     stock_id = request.args.get('stock_id')
@@ -490,6 +608,7 @@ def get_moneyflow():
 # ==================== 交易信号系统 ====================
 
 @advanced_bp.route('/signals', methods=['GET'])
+@jwt_required()
 def get_trading_signals():
     """获取交易信号"""
     stock_id = request.args.get('stock_id')
@@ -564,6 +683,7 @@ def get_trading_signals():
 # ==================== 策略回测 ====================
 
 @advanced_bp.route('/backtest', methods=['POST'])
+@jwt_required()
 def run_backtest():
     """运行策略回测"""
     data = request.json
@@ -776,6 +896,7 @@ def run_backtest():
     })
 
 @advanced_bp.route('/backtest/optimize', methods=['POST'])
+@jwt_required()
 def optimize_strategy():
     """策略参数优化"""
     data = request.json
@@ -939,6 +1060,7 @@ def optimize_strategy():
 # ==================== 智能选股器 ====================
 
 @advanced_bp.route('/screener', methods=['POST'])
+@jwt_required()
 def screen_stocks():
     """智能选股 - 根据条件筛选股票"""
     data = request.json

@@ -21,6 +21,8 @@ import {
   TradingSignalsPage,
   BacktestPage
 } from './pages'
+import LoginPage from './pages/LoginPage'
+import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { setCache, getCache } from './utils/cache'
 import { getCurrentTheme, applyTheme } from './utils/themes'
 
@@ -28,14 +30,50 @@ const API_BASE = 'http://127.0.0.1:5000/api'
 const CACHE_ENABLED = true
 
 export default function App() {
-  const [currentMenu, setCurrentMenu] = useState('dashboard')
-  const [collapsed, setCollapsed] = useState(false)
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
+  )
+}
+
+function AppContent() {
+  const { isAuthenticated, loading } = useAuth()
   
   // 初始化主题
   useEffect(() => {
     const theme = getCurrentTheme()
     applyTheme(theme)
   }, [])
+  
+  // 认证加载中
+  if (loading) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#1a1a2e' }}>
+        <div style={{ textAlign: 'center', color: '#fff' }}>
+          <div style={{ fontSize: 48, marginBottom: 16 }}>🐴</div>
+          <div>加载中...</div>
+        </div>
+      </div>
+    )
+  }
+  
+  // 未登录 → 显示登录页
+  if (!isAuthenticated) {
+    return (
+      <ToastProvider>
+        <LoginPage />
+      </ToastProvider>
+    )
+  }
+  
+  // 已登录 → 显示主界面
+  return <MainApp />
+}
+
+function MainApp() {
+  const [currentMenu, setCurrentMenu] = useState('dashboard')
+  const [collapsed, setCollapsed] = useState(false)
   
   // 全局状态
   const [stocks, setStocks] = useState([])

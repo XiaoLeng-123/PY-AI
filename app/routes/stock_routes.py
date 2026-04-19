@@ -2,8 +2,10 @@
 股票管理路由蓝图
 """
 from flask import Blueprint, request, jsonify
+from flask_jwt_extended import jwt_required
 from app.models.models import db, Stock
 from app.services.financial_api import get_all_stock_codes
+from app.routes.auth_routes import admin_required
 from openai import OpenAI
 import os
 import re
@@ -18,6 +20,8 @@ ai_client = OpenAI(api_key=AI_API_KEY, base_url=AI_BASE_URL)
 
 
 @stock_bp.route('/fetch_all', methods=['POST'])
+@jwt_required()
+@admin_required
 def fetch_all_stocks():
     """获取市场上所有A股股票代码和名称，并批量导入数据库"""
     print("\n=== 开始获取所有A股股票 ===")
@@ -78,6 +82,7 @@ def fetch_all_stocks():
 
 
 @stock_bp.route('/search', methods=['GET'])
+@jwt_required()
 def search_stock():
     """根据股票代码或名称查询股票信息（用于添加前预览）"""
     code = request.args.get('code', '').strip()
@@ -183,6 +188,7 @@ def search_stock():
 
 
 @stock_bp.route('', methods=['GET'])
+@jwt_required()
 def get_stocks():
     """获取所有股票列表"""
     stocks = Stock.query.all()
@@ -196,6 +202,7 @@ def get_stocks():
 
 
 @stock_bp.route('/<int:stock_id>', methods=['GET'])
+@jwt_required()
 def get_stock(stock_id):
     """获取单个股票信息"""
     stock = Stock.query.get_or_404(stock_id)
@@ -209,6 +216,8 @@ def get_stock(stock_id):
 
 
 @stock_bp.route('', methods=['POST'])
+@jwt_required()
+@admin_required
 def add_stock():
     """添加新股票"""
     data = request.json
@@ -233,6 +242,8 @@ def add_stock():
 
 
 @stock_bp.route('/<int:stock_id>', methods=['DELETE'])
+@jwt_required()
+@admin_required
 def delete_stock(stock_id):
     """删除股票"""
     stock = Stock.query.get_or_404(stock_id)
@@ -243,6 +254,7 @@ def delete_stock(stock_id):
 
 
 @stock_bp.route('/<int:stock_id>/info', methods=['GET'])
+@jwt_required()
 def get_stock_detail_info(stock_id):
     """获取股票详细信息(板块、最新消息等)"""
     stock = Stock.query.get_or_404(stock_id)

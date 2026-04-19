@@ -1,7 +1,60 @@
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
+import bcrypt
 
 db = SQLAlchemy()
+
+
+class User(db.Model):
+    """用户表"""
+    __tablename__ = 'users'
+    __table_args__ = {
+        'mysql_comment': '用户表 - 存储用户账号信息',
+        'mysql_charset': 'utf8mb4',
+        'mysql_collate': 'utf8mb4_unicode_ci'
+    }
+    
+    id = db.Column(db.Integer, primary_key=True, comment='主键ID')
+    username = db.Column(db.String(50), unique=True, nullable=False, index=True, comment='用户名')
+    email = db.Column(db.String(120), unique=True, nullable=True, index=True, comment='邮箱')
+    password_hash = db.Column(db.String(128), nullable=False, comment='密码哈希')
+    nickname = db.Column(db.String(50), comment='昵称')
+    avatar = db.Column(db.String(200), default='', comment='头像URL')
+    is_active = db.Column(db.Boolean, default=True, comment='是否启用')
+    role = db.Column(db.String(20), default='user', comment='角色: admin/user')
+    last_login = db.Column(db.DateTime, comment='最后登录时间')
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, comment='创建时间')
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, comment='更新时间')
+    
+    # 关联
+    portfolios = db.relationship('Portfolio', backref='user', lazy=True, cascade='all, delete-orphan')
+    watchlists = db.relationship('Watchlist', backref='user', lazy=True, cascade='all, delete-orphan')
+    alerts = db.relationship('StockAlert', backref='user', lazy=True, cascade='all, delete-orphan')
+    
+    def set_password(self, password):
+        """设置密码（bcrypt加密）"""
+        self.password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+    
+    def check_password(self, password):
+        """验证密码"""
+        return bcrypt.checkpw(password.encode('utf-8'), self.password_hash.encode('utf-8'))
+    
+    def to_dict(self):
+        """转换为字典（不含密码）"""
+        return {
+            'id': self.id,
+            'username': self.username,
+            'email': self.email,
+            'nickname': self.nickname or self.username,
+            'avatar': self.avatar,
+            'is_active': self.is_active,
+            'role': self.role,
+            'last_login': self.last_login.isoformat() if self.last_login else None,
+            'created_at': self.created_at.isoformat()
+        }
+    
+    def __repr__(self):
+        return f'<User {self.username}>'
 
 
 class Stock(db.Model):
@@ -61,6 +114,7 @@ class Portfolio(db.Model):
     }
     
     id = db.Column(db.Integer, primary_key=True, comment='主键ID')
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True, index=True, comment='用户ID(外键)')
     stock_id = db.Column(db.Integer, db.ForeignKey('stocks.id'), nullable=False, index=True, comment='股票ID(外键)')
     stock_code = db.Column(db.String(10), nullable=False, comment='股票代码(冗余字段)')
     stock_name = db.Column(db.String(50), nullable=False, comment='股票名称(冗余字段)')
@@ -87,6 +141,7 @@ class Watchlist(db.Model):
     }
     
     id = db.Column(db.Integer, primary_key=True, comment='主键ID')
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True, index=True, comment='用户ID(外键)')
     stock_id = db.Column(db.Integer, db.ForeignKey('stocks.id'), nullable=False, index=True, comment='股票ID')
     group_name = db.Column(db.String(50), default='默认分组', index=True, comment='分组名称')
     notes = db.Column(db.Text, comment='备注')
@@ -108,6 +163,7 @@ class StockAlert(db.Model):
     }
     
     id = db.Column(db.Integer, primary_key=True, comment='主键ID')
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True, index=True, comment='用户ID(外键)')
     stock_id = db.Column(db.Integer, db.ForeignKey('stocks.id'), nullable=False, index=True, comment='股票ID')
     alert_type = db.Column(db.String(20), nullable=False, index=True, comment='预警类型: price/change/volume/technical')
     condition = db.Column(db.String(20), nullable=False, comment='条件: above/below/cross_up/cross_down')

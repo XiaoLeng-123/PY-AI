@@ -8,11 +8,13 @@ import os
 # 添加项目根目录到Python路径
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from flask import Flask, send_from_directory
+from flask import Flask, send_from_directory, jsonify
 from flask_cors import CORS
 from flask_socketio import SocketIO
+from flask_jwt_extended import JWTManager
 from app.config import Config, STATIC_PATH
 from app.models.models import db
+from app.routes.auth_routes import token_blacklist
 
 
 def create_app():
@@ -28,6 +30,29 @@ def create_app():
     CORS(app)
     socketio = SocketIO(app, cors_allowed_origins="*")
     db.init_app(app)
+    
+    # 初始化JWT
+    jwt = JWTManager(app)
+    
+    @jwt.token_in_blocklist_loader
+    def check_if_token_revoked(jwt_header, jwt_payload):
+        return jwt_payload['jti'] in token_blacklist
+    
+    @jwt.revoked_token_loader
+    def revoked_token_callback(jwt_header, jwt_payload):
+        return jsonify({'error': 'Token已被撤销，请重新登录', 'code': 'token_revoked'}), 401
+    
+    @jwt.expired_token_loader
+    def expired_token_callback(jwt_header, jwt_payload):
+        return jsonify({'error': 'Token已过期，请刷新或重新登录', 'code': 'token_expired'}), 401
+    
+    @jwt.invalid_token_loader
+    def invalid_token_callback(error):
+        return jsonify({'error': '无效的Token', 'code': 'token_invalid'}), 401
+    
+    @jwt.unauthorized_loader
+    def missing_token_callback(error):
+        return jsonify({'error': '缺少认证Token', 'code': 'token_missing'}), 401
     
     # 创建数据库表
     with app.app_context():
@@ -53,6 +78,7 @@ def register_blueprints(app):
     from app.routes.advanced_routes import advanced_bp
     from app.routes.stats_routes import stats_bp
     from app.routes.market_routes import market_bp
+    from app.routes.auth_routes import auth_bp
     
     app.register_blueprint(stock_bp)
     app.register_blueprint(price_bp)
@@ -60,6 +86,7 @@ def register_blueprints(app):
     app.register_blueprint(advanced_bp)
     app.register_blueprint(stats_bp)
     app.register_blueprint(market_bp)
+    app.register_blueprint(auth_bp)
 
 
 def register_routes(app):

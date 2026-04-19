@@ -3,6 +3,7 @@
 提供数据概览、统计分析等接口
 """
 from flask import Blueprint, jsonify
+from flask_jwt_extended import jwt_required
 from app.models.models import db, Stock, StockPrice, Portfolio, Watchlist, StockAlert
 from sqlalchemy import func
 from datetime import date
@@ -11,6 +12,7 @@ stats_bp = Blueprint('stats', __name__, url_prefix='/api/stats')
 
 
 @stats_bp.route('/dashboard', methods=['GET'])
+@jwt_required()
 def get_dashboard_stats():
     """获取数据概览统计信息"""
     try:
@@ -54,6 +56,7 @@ def get_dashboard_stats():
 
 
 @stats_bp.route('/<int:stock_id>', methods=['GET'])
+@jwt_required()
 def get_stock_stats(stock_id):
     """获取单个股票的完整统计信息（专业分析）"""
     try:

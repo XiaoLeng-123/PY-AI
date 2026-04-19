@@ -2,6 +2,7 @@
 AI智能分析路由蓝图
 """
 from flask import Blueprint, request, jsonify
+from flask_jwt_extended import jwt_required
 from app.models.models import db, Stock, StockPrice
 from openai import OpenAI
 import os
@@ -17,6 +18,7 @@ ai_client = OpenAI(api_key=AI_API_KEY, base_url=AI_BASE_URL)
 
 
 @ai_bp.route('/fetch_stock', methods=['POST'])
+@jwt_required()
 def ai_fetch_stock():
     """AI实时查询指定股票指定日期的数据(支持联网搜索)"""
     data = request.json
@@ -55,6 +57,7 @@ def ai_fetch_stock():
 
 
 @ai_bp.route('/analyze', methods=['POST'])
+@jwt_required()
 def ai_analyze():
     """AI分析股票数据"""
     data = request.json
@@ -119,6 +122,7 @@ def ai_analyze():
 
 
 @ai_bp.route('/compare_analyze', methods=['POST'])
+@jwt_required()
 def ai_compare_analyze():
     """AI对比分析多只股票"""
     data = request.json
@@ -170,6 +174,7 @@ def ai_compare_analyze():
 
 
 @ai_bp.route('/chat', methods=['POST'])
+@jwt_required()
 def ai_chat():
     """AI对话（通用问题）"""
     data = request.json

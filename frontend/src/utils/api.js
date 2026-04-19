@@ -2,6 +2,44 @@ import axios from 'axios'
 
 const API_BASE = 'http://127.0.0.1:5000/api'
 
+// 请求拦截器 - 自动附加JWT Token
+axios.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('access_token')
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`
+    }
+    return config
+  },
+  (error) => Promise.reject(error)
+)
+
+// 响应拦截器 - 自动刷新Token
+axios.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const originalRequest = error.config
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      const code = error.response?.data?.code
+      if (code === 'token_expired') {
+        originalRequest._retry = true
+        try {
+          const rt = localStorage.getItem('refresh_token')
+          if (!rt) { localStorage.clear(); window.location.href = '/'; return Promise.reject(error) }
+          const res = await axios.post(`${API_BASE}/auth/refresh`, {}, { headers: { Authorization: `Bearer ${rt}` } })
+          const { access_token } = res.data
+          localStorage.setItem('access_token', access_token)
+          originalRequest.headers.Authorization = `Bearer ${access_token}`
+          return axios(originalRequest)
+        } catch { localStorage.clear(); window.location.href = '/'; return Promise.reject(error) }
+      } else if (code === 'token_revoked' || code === 'token_invalid' || code === 'token_missing') {
+        localStorage.clear(); window.location.href = '/'
+      }
+    }
+    return Promise.reject(error)
+  }
+)
+
 // 小马相关API
 export const stockAPI = {
   getAll: () => axios.get(`${API_BASE}/stocks`),
@@ -30,18 +68,18 @@ export const stockAPI = {
 
 // 持仓管理API
 export const portfolioAPI = {
-  getAll: () => axios.get(`${API_BASE}/portfolio`),
-  add: (data) => axios.post(`${API_BASE}/portfolio`, data),
-  update: (id, data) => axios.put(`${API_BASE}/portfolio/${id}`, data),
-  delete: (id) => axios.delete(`${API_BASE}/portfolio/${id}`),
+  getAll: () => axios.get(`${API_BASE}/advanced/portfolio`),
+  add: (data) => axios.post(`${API_BASE}/advanced/portfolio`, data),
+  update: (id, data) => axios.put(`${API_BASE}/advanced/portfolio/${id}`, data),
+  delete: (id) => axios.delete(`${API_BASE}/advanced/portfolio/${id}`),
 }
 
 // 预警系统API
 export const alertAPI = {
-  getAll: () => axios.get(`${API_BASE}/alerts`),
-  add: (data) => axios.post(`${API_BASE}/alerts`, data),
-  delete: (id) => axios.delete(`${API_BASE}/alerts/${id}`),
-  check: (stockId) => axios.post(`${API_BASE}/alerts/check`, { stock_id: stockId }),
+  getAll: () => axios.get(`${API_BASE}/advanced/alerts`),
+  add: (data) => axios.post(`${API_BASE}/advanced/alerts`, data),
+  delete: (id) => axios.delete(`${API_BASE}/advanced/alerts/${id}`),
+  check: (stockId) => axios.post(`${API_BASE}/advanced/alerts/check`, { stock_id: stockId }),
 }
 
 // 对比分析API

@@ -1,26 +1,28 @@
 import { useState } from 'react'
+import { useAuth } from '../contexts/AuthContext'
 
-const menuItems = [
-  { key: 'dashboard', label: '数据概览', icon: '📊' },
-  { key: 'stockManage', label: '小马管理', icon: '🐴' },
-  { key: 'fetchAllStocks', label: '批量获取股票', icon: '📥' },
-  { key: 'dataEntry', label: '数据录入', icon: '📝' },
-  { key: 'dataView', label: '数据查看', icon: '📈' },
-  { key: 'statistics', label: '统计分析', icon: '📉' },
-  { key: 'watchlist', label: '自选股', icon: '⭐' },
-  { key: 'alerts', label: '预警系统', icon: '🔔' },
-  { key: 'sectorAnalysis', label: '板块分析', icon: '📊' },
-  { key: 'moneyflow', label: '资金流向', icon: '💰' },
-  { key: 'signals', label: '交易信号', icon: '🎯' },
-  { key: 'backtest', label: '策略回测', icon: '📊' },
-  { key: 'portfolio', label: '持仓管理', icon: '💼' },
-  { key: 'compare', label: '对比分析', icon: '⚖️' },
-  { key: 'screener', label: '智能选股', icon: '🔍' },
-  { key: 'financialForecast', label: '财务预报', icon: '💰' },
-  { key: 'longhubang', label: '龙虎榜', icon: '🏆' },
-  { key: 'auction', label: '集合竞价', icon: '⏰' },
-  { key: 'aiAnalysis', label: 'AI分析', icon: '🤖' },
-  { key: 'settings', label: '系统设置', icon: '⚙️' },
+// 所有菜单项
+const allMenuItems = [
+  { key: 'dashboard', label: '数据概览', icon: '📊', access: 'public' },
+  { key: 'stockManage', label: '小马管理', icon: '🐴', access: 'admin' },
+  { key: 'fetchAllStocks', label: '批量获取股票', icon: '📥', access: 'admin' },
+  { key: 'dataEntry', label: '数据录入', icon: '📝', access: 'admin' },
+  { key: 'dataView', label: '数据查看', icon: '📈', access: 'public' },
+  { key: 'statistics', label: '统计分析', icon: '📉', access: 'public' },
+  { key: 'watchlist', label: '自选股', icon: '⭐', access: 'private' },
+  { key: 'alerts', label: '预警系统', icon: '🔔', access: 'private' },
+  { key: 'sectorAnalysis', label: '板块分析', icon: '📊', access: 'public' },
+  { key: 'moneyflow', label: '资金流向', icon: '💰', access: 'public' },
+  { key: 'signals', label: '交易信号', icon: '🎯', access: 'public' },
+  { key: 'backtest', label: '策略回测', icon: '📊', access: 'public' },
+  { key: 'portfolio', label: '持仓管理', icon: '💼', access: 'private' },
+  { key: 'compare', label: '对比分析', icon: '⚖️', access: 'public' },
+  { key: 'screener', label: '智能选股', icon: '🔍', access: 'public' },
+  { key: 'financialForecast', label: '财务预报', icon: '💰', access: 'public' },
+  { key: 'longhubang', label: '龙虎榜', icon: '🏆', access: 'public' },
+  { key: 'auction', label: '集合竞价', icon: '⏰', access: 'public' },
+  { key: 'aiAnalysis', label: 'AI分析', icon: '🤖', access: 'public' },
+  { key: 'settings', label: '系统设置', icon: '⚙️', access: 'admin' },
 ]
 
 const breadcrumbMap = {
@@ -42,6 +44,19 @@ const breadcrumbMap = {
 }
 
 export default function AppLayout({ currentMenu, setCurrentMenu, collapsed, setCollapsed, children }) {
+  const { user, logout } = useAuth()
+  const [showUserMenu, setShowUserMenu] = useState(false)
+  
+  // 根据角色过滤菜单：admin=全部, user=非admin菜单
+  const menuItems = allMenuItems.filter(item => {
+    if (item.access === 'admin') return user?.role === 'admin'
+    return true  // public 和 private 对所有登录用户可见
+  })
+  
+  const handleLogout = async () => {
+    setShowUserMenu(false)
+    await logout()
+  }
   return (
     <div className="layout">
       {/* 侧边栏 - 苹果风格 */}
@@ -64,8 +79,27 @@ export default function AppLayout({ currentMenu, setCurrentMenu, collapsed, setC
           ))}
         </nav>
         
-        {/* 底部收缩按钮 */}
+        {/* 底部收缩按钮 + 用户信息 */}
         <div className="sidebar-footer">
+          {!collapsed && user && (
+            <div style={{ padding: '8px 12px', borderTop: '1px solid var(--border-color)', marginBottom: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'linear-gradient(135deg, #667eea, #764ba2)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 14, fontWeight: 600, flexShrink: 0 }}>
+                  {user.nickname?.charAt(0) || user.username?.charAt(0)}
+                </div>
+                <div style={{ overflow: 'hidden', flex: 1 }}>
+                  <div style={{ color: 'var(--text-primary)', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{user.nickname || user.username}</div>
+                  <div style={{ color: user.role === 'admin' ? '#f59e0b' : 'var(--text-tertiary)', fontSize: 11, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{user.role === 'admin' ? '管理员' : '在线'}</div>
+                </div>
+                <button onClick={handleLogout} title="退出登录" style={{ background: 'none', border: 'none', color: 'var(--text-tertiary)', cursor: 'pointer', fontSize: 16, padding: 4, borderRadius: 6, transition: 'color 0.2s' }} onMouseOver={e => e.target.style.color='#ff4d4f'} onMouseOut={e => e.target.style.color='var(--text-tertiary)'}>⏻</button>
+              </div>
+            </div>
+          )}
+          {collapsed && user && (
+            <div style={{ padding: '8px 0', borderTop: '1px solid var(--border-color)', marginBottom: 8, textAlign: 'center' }}>
+              <button onClick={handleLogout} title="退出登录" style={{ background: 'none', border: 'none', color: 'var(--text-tertiary)', cursor: 'pointer', fontSize: 18, padding: 4 }}>⏻</button>
+            </div>
+          )}
           <button 
             className="collapse-btn pill-btn-sm"
             onClick={() => setCollapsed(!collapsed)}
