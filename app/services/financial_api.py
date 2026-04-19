@@ -1212,3 +1212,58 @@ def _get_kline_from_akshare(stock_code, start_date, end_date, max_retries=3):
             if attempt == max_retries:
                 print(f"❌ AkShare备用API也失败，已尝试 {max_retries} 次")
                 return []
+
+
+def get_historical_prices(stock_code, days=90):
+    """从网络 API 获取历史K线数据（新浪财经）"""
+    try:
+        # 确定市场代码
+        market = "sz" if stock_code.startswith(('0', '3')) else "sh"
+        sina_code = f"{market}{stock_code}"
+        
+        # 新浪财经K线API
+        url = f"https://quotes.sina.cn/cn/api/jsonp_v2.php/var/CN_MarketDataService.getKLineData"
+        
+        params = {
+            'symbol': sina_code,
+            'scale': '240',  # 日线
+            'ma': 'no',
+            'datalen': str(days + 20)
+        }
+        
+        headers = {
+            'Referer': 'https://finance.sina.com.cn/',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
+        
+        resp = requests.get(url, params=params, headers=headers, timeout=15)
+        if resp.status_code == 200:
+            text = resp.text
+            # 解析JSONP: var ... = [...]
+            match = re.search(r'\[.*\]', text)
+            if match:
+                import json
+                data = json.loads(match.group())
+                result = []
+                
+                for item in data[-days:]:
+                    result.append({
+                        'date': item.get('day', ''),
+                        'open': float(item.get('open', 0)),
+                        'close': float(item.get('close', 0)),
+                        'high': float(item.get('high', 0)),
+                        'low': float(item.get('low', 0)),
+                        'volume': int(item.get('volume', 0))
+                    })
+                
+                print(f"✅ 从新浪财经获取到 {len(result)} 条历史K线数据")
+                return result
+        
+        print("⚠️ 新浪财经历史数据获取失败")
+        return []
+        
+    except Exception as e:
+        print(f"❌ 获取历史K线数据失败: {e}")
+        import traceback
+        traceback.print_exc()
+        return []

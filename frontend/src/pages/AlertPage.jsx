@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef, useMemo } from 'react'
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import axios from 'axios'
+import { stockAPI } from '../utils/api'
 import { toast } from '../components/Toast'
-import AppleSelect from '../components/AppleSelect'
 
 const API_BASE = 'http://127.0.0.1:5000/api'
 
@@ -16,15 +16,52 @@ export default function AlertPage({ stocks, selectedStock, toast }) {
     threshold: ''
   })
   
-  // 转换股票数据为选项格式
-  const stockOptions = useMemo(() => {
-    return stocks.map(s => ({
-      value: s.id,
-      label: `${s.code} - ${s.name}`,
-      code: s.code,
-      name: s.name
-    }))
-  }, [stocks])
+  // 股票下拉框状态
+  const [stockDropdownOpen, setStockDropdownOpen] = useState(false)
+  const [stockSearchText, setStockSearchText] = useState('')
+  const [stockDropdownRef, setStockDropdownRef] = useState(null)
+  const [dropdownStocks, setDropdownStocks] = useState([])
+  const [dropdownTotal, setDropdownTotal] = useState(0)
+  const [dropdownPage, setDropdownPage] = useState(1)
+  const [dropdownLoading, setDropdownLoading] = useState(false)
+  
+  // 从后端加载下拉框股票列表
+  const loadDropdownStocks = useCallback(async () => {
+    if (!stockDropdownOpen) return
+    setDropdownLoading(true)
+    try {
+      const response = await stockAPI.getAll({
+        page: dropdownPage,
+        page_size: 20,
+        search: stockSearchText
+      })
+      const data = response.data || {}
+      setDropdownStocks(data.items || [])
+      setDropdownTotal(data.total || 0)
+    } catch (error) {
+      console.error('加载股票列表失败:', error)
+      setDropdownStocks([])
+      setDropdownTotal(0)
+    } finally {
+      setDropdownLoading(false)
+    }
+  }, [stockDropdownOpen, dropdownPage, stockSearchText])
+  
+  useEffect(() => {
+    loadDropdownStocks()
+  }, [loadDropdownStocks])
+  
+  // 点击外部关闭下拉框
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (stockDropdownRef && !stockDropdownRef.contains(e.target)) {
+        setStockDropdownOpen(false)
+        setStockSearchText('')
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [stockDropdownRef])
   
   // 预警类型选项
   const alertTypeOptions = [
@@ -229,14 +266,123 @@ export default function AlertPage({ stocks, selectedStock, toast }) {
                   <span className="label-icon">📊</span>
                   选择股票
                 </label>
-                <AppleSelect
-                  options={stockOptions}
-                  value={alertForm.stock_id}
-                  onChange={(val) => setAlertForm({...alertForm, stock_id: val})}
-                  placeholder="搜索股票代码或名称..."
-                  filterFields={['code', 'name', 'label']}
-                  width="100%"
-                />
+                <div ref={setStockDropdownRef} className="apple-dropdown-wrapper" style={{ minWidth: '300px' }}>
+                  <div
+                    onClick={() => setStockDropdownOpen(!stockDropdownOpen)}
+                    className="apple-select-trigger"
+                    style={{ minWidth: '300px' }}
+                  >
+                    <div className="select-content">
+                      {alertForm.stock_id ? (() => {
+                        const s = dropdownStocks.find(st => st.id === Number(alertForm.stock_id))
+                        return s ? (
+                          <div className="selected-stock">
+                            <span className="stock-code">{s.code}</span>
+                            <span className="stock-name">{s.name}</span>
+                          </div>
+                        ) : <span className="placeholder">请选择股票</span>
+                      })() : <span className="placeholder">搜索股票代码或名称...</span>}
+                    </div>
+                    <span className="dropdown-arrow">▼</span>
+                  </div>
+                  
+                  {stockDropdownOpen && (
+                    <div className="apple-dropdown">
+                      <div className="dropdown-search">
+                        <span className="search-icon">🔍</span>
+                        <input
+                          type="text"
+                          placeholder="搜索代码或名称"
+                          value={stockSearchText}
+                          onChange={(e) => { setStockSearchText(e.target.value); setDropdownPage(1) }}
+                          className="apple-input search-input"
+                          autoFocus
+                        />
+                        {dropdownLoading && <span style={{ marginLeft: '8px' }}>⏳</span>}
+                      </div>
+                      
+                      <div className="dropdown-list">
+                        {dropdownStocks.length === 0 && stockSearchText.trim() ? (
+                          <div className="apple-empty">
+                            <div className="empty-icon">🔍</div>
+                            <div>未找到匹配股票</div>
+                          </div>
+                        ) : dropdownStocks.length === 0 ? (
+                          <div className="apple-empty">
+                            <div className="empty-icon">💡</div>
+                            <div>输入关键词开始搜索</div>
+                          </div>
+                        ) : (
+                          dropdownStocks.map(s => (
+                            <div
+                              key={s.id}
+                              onClick={() => {
+                                setAlertForm({...alertForm, stock_id: s.id})
+                                setStockDropdownOpen(false)
+                                setStockSearchText('')
+                              }}
+                              className={`apple-dropdown-item ${alertForm.stock_id === s.id ? 'active' : ''}`}
+                            >
+                              <div className="item-left">
+                                <span className="item-code">{s.code}</span>
+                                <span className="item-name">{s.name}</span>
+                              </div>
+                              <span className="item-tag">{s.market}</span>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                      
+                      {/* 分页控制 */}
+                      {dropdownTotal > 20 && (
+                        <div className="dropdown-pagination" style={{
+                          display: 'flex',
+                          justifyContent: 'center',
+                          alignItems: 'center',
+                          gap: '8px',
+                          padding: '8px 16px',
+                          borderTop: '1px solid rgba(0,0,0,0.06)'
+                        }}>
+                          <button 
+                            onClick={() => setDropdownPage(p => Math.max(1, p - 1))}
+                            disabled={dropdownPage === 1 || dropdownLoading}
+                            style={{ 
+                              padding: '4px 12px', 
+                              border: '1px solid rgba(0,0,0,0.1)',
+                              borderRadius: '6px',
+                              background: dropdownPage === 1 ? '#f5f5f5' : '#fff',
+                              cursor: dropdownPage === 1 ? 'not-allowed' : 'pointer'
+                            }}
+                          >
+                            ← 上一页
+                          </button>
+                          <span style={{ fontSize: '13px', color: '#666' }}>
+                            第 {dropdownPage} 页 / 共 {Math.ceil(dropdownTotal / 20)} 页
+                          </span>
+                          <button 
+                            onClick={() => setDropdownPage(p => p + 1)}
+                            disabled={dropdownPage >= Math.ceil(dropdownTotal / 20) || dropdownLoading}
+                            style={{ 
+                              padding: '4px 12px', 
+                              border: '1px solid rgba(0,0,0,0.1)',
+                              borderRadius: '6px',
+                              background: dropdownPage >= Math.ceil(dropdownTotal / 20) ? '#f5f5f5' : '#fff',
+                              cursor: dropdownPage >= Math.ceil(dropdownTotal / 20) ? 'not-allowed' : 'pointer'
+                            }}
+                          >
+                            下一页 →
+                          </button>
+                        </div>
+                      )}
+                      
+                      {dropdownStocks.length > 0 && (
+                        <div className="dropdown-stats">
+                          共 <strong>{dropdownTotal}</strong> 只股票，当前显示 {dropdownStocks.length} 只
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
                           
               {/* 预警类型 */}
@@ -245,14 +391,16 @@ export default function AlertPage({ stocks, selectedStock, toast }) {
                   <span className="label-icon">🎯</span>
                   预警类型
                 </label>
-                <AppleSelect
-                  options={alertTypeOptions}
+                <select
                   value={alertForm.alert_type}
-                  onChange={(val) => setAlertForm({...alertForm, alert_type: val})}
-                  placeholder="选择预警类型"
-                  filterFields={['label']}
-                  width="100%"
-                />
+                  onChange={(e) => setAlertForm({...alertForm, alert_type: e.target.value})}
+                  className="apple-select"
+                  style={{ width: '100%' }}
+                >
+                  {alertTypeOptions.map(opt => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
               </div>
                           
               {/* 触发条件 */}
@@ -261,14 +409,16 @@ export default function AlertPage({ stocks, selectedStock, toast }) {
                   <span className="label-icon">⚡</span>
                   触发条件
                 </label>
-                <AppleSelect
-                  options={conditionOptions}
+                <select
                   value={alertForm.condition}
-                  onChange={(val) => setAlertForm({...alertForm, condition: val})}
-                  placeholder="选择触发条件"
-                  filterFields={['label']}
-                  width="100%"
-                />
+                  onChange={(e) => setAlertForm({...alertForm, condition: e.target.value})}
+                  className="apple-select"
+                  style={{ width: '100%' }}
+                >
+                  {conditionOptions.map(opt => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
               </div>
               
               {/* 阈值输入 */}

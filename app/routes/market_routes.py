@@ -128,125 +128,159 @@ def get_longhubang():
 @market_bp.route('/auction', methods=['GET'])
 @jwt_required()
 def get_auction_data():
-    """获取集合竞价数据"""
+    """获取集合竞价数据 - 使用新浪财经数据源"""
     import time
+    import requests
+    
     date = request.args.get('date')
     sort_by = request.args.get('sort_by', 'amount')
     
     if not date:
         date = datetime.now().strftime('%Y-%m-%d')
     
-    max_retries = 3  # 增加到3次重试
-    for attempt in range(max_retries):
+    # 尝试多个数据源
+    data_sources = [
+        ('新浪', _get_auction_from_sina),
+        ('腾讯', _get_auction_from_tencent)
+    ]
+    
+    for source_name, source_func in data_sources:
         try:
-            print(f"[集合竞价] 尝试第 {attempt + 1} 次请求...")
-            
-            import requests
-            
-            # 东方财富集合竞价API
-            url = "http://push2.eastmoney.com/api/qt/clist/get"
-            params = {
-                'pn': 1,
-                'pz': 50,
-                'po': 1,
-                'np': 1,
-                'fltt': 2,
-                'invt': 2,
-                'fid': 'f12',
-                'fs': 'm:0+t:6,m:0+t:80,m:1+t:2,m:1+t:23',
-                'fields': 'f2,f3,f4,f5,f6,f12,f14',
-                '_': int(datetime.now().timestamp() * 1000)
-            }
-            
-            headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                'Referer': 'http://quote.eastmoney.com/center/gridlist.html'
-            }
-            
-            response = requests.get(url, params=params, headers=headers, timeout=12)  # 增加超时时间
-            response.raise_for_status()
-            data = response.json()
-            
-            if data.get('data') and data['data'].get('diff'):
-                stocks = data['data']['diff']
-                
-                result = []
-                for stock in stocks:
-                    result.append({
-                        'code': stock.get('f12'),
-                        'name': stock.get('f14'),
-                        'price': round(float(stock.get('f2', 0)), 2),
-                        'change_pct': round(float(stock.get('f3', 0)), 2),
-                        'change_amount': round(float(stock.get('f4', 0)), 2),
-                        'volume': int(stock.get('f5', 0)),
-                        'amount': round(float(stock.get('f6', 0)), 2)
-                    })
-                
-                # 根据排序方式排序
-                if sort_by == 'change':
-                    result.sort(key=lambda x: x['change_pct'], reverse=True)
-                else:
-                    result.sort(key=lambda x: x['amount'], reverse=True)
-                
-                print(f"[集合竞价] 成功获取 {len(result)} 条数据")
+            print(f"[集合竞价] 尝试从{source_name}获取数据...")
+            result = source_func(sort_by)
+            if result:
+                print(f"[集合竞价] 从{source_name}成功获取 {len(result)} 条数据")
                 return jsonify({
                     'success': True,
                     'date': date,
                     'count': len(result),
-                    'data': result[:20]  # 只返回前20条
+                    'data': result[:20],
+                    'source': source_name
                 })
-            else:
-                print("[集合竞价] API返回数据为空")
-                return jsonify({
-                    'success': True,
-                    'date': date,
-                    'count': 0,
-                    'data': [],
-                    'message': '暂无集合竞价数据'
-                })
-        
-        except requests.exceptions.Timeout:
-            error_msg = f"请求超时（第 {attempt + 1} 次）"
-            print(f"[集合竞价] {error_msg}")
-            if attempt == max_retries - 1:
-                return jsonify({
-                    'success': False,
-                    'error': '请求超时',
-                    'message': '东方财富API响应超时，请稍后重试或检查网络连接',
-                    'date': date,
-                    'data': []
-                }), 503
-            time.sleep(3)  # 超时后等待3秒
-        except requests.exceptions.ConnectionError as e:
-            error_msg = f"连接失败（第 {attempt + 1} 次）: {str(e)}"
-            print(f"[集合竞价] {error_msg}")
-            if attempt == max_retries - 1:
-                return jsonify({
-                    'success': False,
-                    'error': '连接失败',
-                    'message': '无法连接东方财富API，请检查网络设置或稍后重试',
-                    'date': date,
-                    'data': []
-                }), 503
-            time.sleep(3)  # 连接失败后等待3秒
-        except requests.exceptions.RequestException as e:
-            error_msg = f"网络请求失败（第 {attempt + 1} 次）: {str(e)}"
-            print(f"[集合竞价] {error_msg}")
-            if attempt == max_retries - 1:
-                return jsonify({
-                    'success': False,
-                    'error': '网络错误',
-                    'message': f'网络请求失败: {str(e)}',
-                    'date': date,
-                    'data': []
-                }), 503
-            time.sleep(3)
         except Exception as e:
-            print(f"[集合竞价] 获取数据失败: {str(e)}")
-            return jsonify({
-                'success': False,
-                'error': str(e),
-                'message': '获取集合竞价数据失败',
-                'date': date,
-                'data': []
-            }), 500
+            print(f"[集合竞价] {source_name}数据源失败: {str(e)}")
+            continue
+    
+    # 所有数据源都失败
+    return jsonify({
+        'success': False,
+        'error': '所有数据源均不可用',
+        'message': '新浪、腾讯等数据源均无法连接，请检查网络或稍后重试',
+        'date': date,
+        'data': []
+    }), 503
+
+
+def _get_auction_from_sina(sort_by='amount'):
+    """从新浪财经获取集合竞价数据"""
+    import requests
+    
+    # 新浪财经实时行情API - 获取涨幅排行（集合竞价期间）
+    url = "http://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData"
+    
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Referer': 'http://vip.stock.finance.sina.com.cn/'
+    }
+    
+    all_stocks = []
+    
+    # 获取沪市数据
+    params_sh = {
+        'page': '1',
+        'num': '40',
+        'sort': 'changepercent' if sort_by == 'change' else 'amount',
+        'asc': '0',
+        'node': 'sh_a',
+        'symbol': '',
+        '_s_r_a': 'page'
+    }
+    
+    resp = requests.get(url, params=params_sh, headers=headers, timeout=10)
+    if resp.status_code == 200:
+        data = resp.json()
+        for stock in data:
+            all_stocks.append({
+                'code': stock.get('code', ''),
+                'name': stock.get('name', ''),
+                'price': float(stock.get('trade', 0)),
+                'change_pct': float(stock.get('changepercent', 0)),
+                'change_amount': float(stock.get('pricechange', 0)),
+                'volume': int(stock.get('volume', 0)),
+                'amount': float(stock.get('amount', 0)) * 10000  # 转换为元
+            })
+    
+    # 获取深市数据
+    params_sz = {
+        'page': '1',
+        'num': '40',
+        'sort': 'changepercent' if sort_by == 'change' else 'amount',
+        'asc': '0',
+        'node': 'sz_a',
+        'symbol': '',
+        '_s_r_a': 'page'
+    }
+    
+    resp = requests.get(url, params=params_sz, headers=headers, timeout=10)
+    if resp.status_code == 200:
+        data = resp.json()
+        for stock in data:
+            all_stocks.append({
+                'code': stock.get('code', ''),
+                'name': stock.get('name', ''),
+                'price': float(stock.get('trade', 0)),
+                'change_pct': float(stock.get('changepercent', 0)),
+                'change_amount': float(stock.get('pricechange', 0)),
+                'volume': int(stock.get('volume', 0)),
+                'amount': float(stock.get('amount', 0)) * 10000
+            })
+    
+    # 排序
+    if sort_by == 'change':
+        all_stocks.sort(key=lambda x: x['change_pct'], reverse=True)
+    else:
+        all_stocks.sort(key=lambda x: x['amount'], reverse=True)
+    
+    return all_stocks[:50]
+
+
+def _get_auction_from_tencent(sort_by='amount'):
+    """从腾讯财经获取集合竞价数据"""
+    import requests
+    
+    # 腾讯财经API - 获取沪深A股排行
+    url = "https://web.ifzq.gtimg.cn/appstock/app/quote/rank/get"
+    
+    params = {
+        'param': 'rank_a/changepercent',  # 涨幅排行
+        'page': '1',
+        'num': '50'
+    }
+    
+    if sort_by == 'amount':
+        params['param'] = 'rank_a/amount'  # 成交额排行
+    
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Referer': 'https://stockapp.finance.qq.com/'
+    }
+    
+    resp = requests.get(url, params=params, headers=headers, timeout=10)
+    if resp.status_code == 200:
+        data = resp.json()
+        if data.get('code') == 0:
+            stocks_data = data.get('data', {}).get('rank_a', [])
+            result = []
+            for stock in stocks_data:
+                result.append({
+                    'code': stock.get('code', ''),
+                    'name': stock.get('name', ''),
+                    'price': float(stock.get('price', 0)),
+                    'change_pct': float(stock.get('changepercent', 0)),
+                    'change_amount': float(stock.get('pricechange', 0)),
+                    'volume': int(stock.get('volume', 0)),
+                    'amount': float(stock.get('amount', 0))
+                })
+            return result
+    
+    return []

@@ -2,6 +2,7 @@
 价格数据管理路由蓝图
 """
 from flask import Blueprint, request, jsonify
+from flask_jwt_extended import jwt_required
 from app.models.models import db, Stock, StockPrice
 from app.services.financial_api import get_stock_history_kline
 import datetime
@@ -277,6 +278,7 @@ def fetch_history_prices(stock_id):
 
 
 @price_bp.route('/<int:stock_id>/indicators', methods=['GET'])
+@jwt_required()
 def get_indicators(stock_id):
     """计算并返回股票的技术指标（数组格式适配图表，支持日K/周K/月K）"""
     stock = Stock.query.get_or_404(stock_id)

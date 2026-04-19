@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { screenerAPI } from '../../utils/api'
+import Pagination from '../Pagination'
 
 const ScreenerPage = ({ toast }) => {
   const [filters, setFilters] = useState({
@@ -12,12 +13,16 @@ const ScreenerPage = ({ toast }) => {
   })
   const [results, setResults] = useState(null)
   const [loading, setLoading] = useState(false)
+  // 分页
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(20)
 
   const handleScreen = async () => {
     setLoading(true)
     try {
       const response = await screenerAPI.screen(filters)
       setResults(response.data)
+      setPage(1) // 筛选后重置页码
     } catch (error) {
       toast.error('筛选失败')
     } finally {
@@ -161,10 +166,10 @@ const ScreenerPage = ({ toast }) => {
                   </tr>
                 </thead>
                 <tbody>
-                  {results.results.map((stock, idx) => (
+                  {results.results.slice((page - 1) * pageSize, page * pageSize).map((stock, idx) => (
                     <tr key={stock.stock_id}>
                       <td>
-                        <span className="rank-badge">{idx + 1}</span>
+                        <span className="rank-badge">{(page - 1) * pageSize + idx + 1}</span>
                       </td>
                       <td><strong>{stock.stock_code}</strong></td>
                       <td>{stock.stock_name}</td>
@@ -179,6 +184,13 @@ const ScreenerPage = ({ toast }) => {
               </table>
             </div>
           )}
+          <Pagination
+            total={results.results.length}
+            page={page}
+            pageSize={pageSize}
+            onPageChange={setPage}
+            onPageSizeChange={(s) => { setPageSize(s); setPage(1) }}
+          />
         </div>
       )}
     </div>

@@ -1,57 +1,163 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 
-// 所有菜单项
-const allMenuItems = [
-  { key: 'dashboard', label: '数据概览', icon: '📊', access: 'public' },
-  { key: 'stockManage', label: '小马管理', icon: '🐴', access: 'admin' },
-  { key: 'fetchAllStocks', label: '批量获取股票', icon: '📥', access: 'admin' },
-  { key: 'dataEntry', label: '数据录入', icon: '📝', access: 'admin' },
-  { key: 'dataView', label: '数据查看', icon: '📈', access: 'public' },
-  { key: 'statistics', label: '统计分析', icon: '📉', access: 'public' },
-  { key: 'watchlist', label: '自选股', icon: '⭐', access: 'private' },
-  { key: 'alerts', label: '预警系统', icon: '🔔', access: 'private' },
-  { key: 'sectorAnalysis', label: '板块分析', icon: '📊', access: 'public' },
-  { key: 'moneyflow', label: '资金流向', icon: '💰', access: 'public' },
-  { key: 'signals', label: '交易信号', icon: '🎯', access: 'public' },
-  { key: 'backtest', label: '策略回测', icon: '📊', access: 'public' },
-  { key: 'portfolio', label: '持仓管理', icon: '💼', access: 'private' },
-  { key: 'compare', label: '对比分析', icon: '⚖️', access: 'public' },
-  { key: 'screener', label: '智能选股', icon: '🔍', access: 'public' },
-  { key: 'financialForecast', label: '财务预报', icon: '💰', access: 'public' },
-  { key: 'longhubang', label: '龙虎榜', icon: '🏆', access: 'public' },
-  { key: 'auction', label: '集合竞价', icon: '⏰', access: 'public' },
-  { key: 'aiAnalysis', label: 'AI分析', icon: '🤖', access: 'public' },
-  { key: 'settings', label: '系统设置', icon: '⚙️', access: 'admin' },
+// 构建菜单key到标签的映射
+const menuLabelMap = {}
+const allMenuGroups = [
+  {
+    group: 'overview',
+    label: '总览',
+    items: [
+      { key: 'dashboard', label: '数据概览', icon: '📊', access: 'public' },
+    ]
+  },
+  {
+    group: 'data',
+    label: '数据管理',
+    items: [
+      { key: 'stockManage', label: '小马管理', icon: '🐴', access: 'admin' },
+      { key: 'fetchAllStocks', label: '批量获取股票', icon: '📥', access: 'admin' },
+      { key: 'dataEntry', label: '数据录入', icon: '📝', access: 'admin' },
+      { key: 'dataView', label: '数据查看', icon: '📈', access: 'public' },
+      { key: 'statistics', label: '统计分析', icon: '📉', access: 'public' },
+    ]
+  },
+  {
+    group: 'invest',
+    label: '我的投资',
+    items: [
+      { key: 'watchlist', label: '自选股', icon: '⭐', access: 'private' },
+      { key: 'alerts', label: '预警系统', icon: '🔔', access: 'private' },
+      { key: 'portfolio', label: '持仓管理', icon: '💼', access: 'private' },
+    ]
+  },
+  {
+    group: 'analysis',
+    label: '分析工具',
+    items: [
+      { key: 'sectorAnalysis', label: '板块分析', icon: '📊', access: 'public' },
+      { key: 'moneyflow', label: '资金流向', icon: '💰', access: 'public' },
+      { key: 'signals', label: '交易信号', icon: '🎯', access: 'public' },
+      { key: 'backtest', label: '策略回测', icon: '📊', access: 'public' },
+      { key: 'compare', label: '对比分析', icon: '⚖️', access: 'public' },
+      { key: 'screener', label: '智能选股', icon: '🔍', access: 'public' },
+      { key: 'financialForecast', label: '财务预报', icon: '💰', access: 'public' },
+    ]
+  },
+  {
+    group: 'market',
+    label: '市场数据',
+    items: [
+      { key: 'longhubang', label: '龙虎榜', icon: '🏆', access: 'public' },
+      { key: 'auction', label: '集合竞价', icon: '⏰', access: 'public' },
+    ]
+  },
+  {
+    group: 'ai',
+    label: 'AI 助手',
+    items: [
+      { key: 'aiAnalysis', label: 'AI分析', icon: '🤖', access: 'public' },
+    ]
+  },
+  {
+    group: 'system',
+    label: '系统管理',
+    items: [
+      { key: 'settings', label: '系统设置', icon: '⚙️', access: 'admin' },
+    ]
+  },
 ]
 
-const breadcrumbMap = {
-  dashboard: ['首页', '数据概览'],
-  stockManage: ['首页', '小马管理'],
-  fetchAllStocks: ['首页', '数据管理', '批量获取股票'],
-  dataEntry: ['首页', '数据管理', '数据录入'],
-  dataView: ['首页', '数据管理', '数据查看'],
-  statistics: ['首页', '数据分析', '统计分析'],
-  backtest: ['首页', '数据分析', '策略回测'],
-  portfolio: ['首页', '投资组合', '持仓管理'],
-  compare: ['首页', '数据分析', '对比分析'],
-  screener: ['首页', '数据分析', '智能选股'],
-  financialForecast: ['首页', '数据分析', '财务预报分析'],
-  longhubang: ['首页', '市场数据', '龙虎榜'],
-  auction: ['首页', '市场数据', '集合竞价'],
-  aiAnalysis: ['首页', '数据分析', 'AI分析'],
-  settings: ['首页', '系统设置', '配置管理'],
-}
+// 初始化菜单标签映射
+allMenuGroups.forEach(g => {
+  g.items.forEach(item => {
+    menuLabelMap[item.key] = item.label
+  })
+})
+
+// 构建分组key到菜单key的映射，用于自动展开当前选中菜单所在分组
+const groupKeyMap = {}
+allMenuGroups.forEach(g => {
+  g.items.forEach(item => {
+    groupKeyMap[item.key] = g.group
+  })
+})
 
 export default function AppLayout({ currentMenu, setCurrentMenu, collapsed, setCollapsed, children }) {
   const { user, logout } = useAuth()
   const [showUserMenu, setShowUserMenu] = useState(false)
-  
-  // 根据角色过滤菜单：admin=全部, user=非admin菜单
-  const menuItems = allMenuItems.filter(item => {
-    if (item.access === 'admin') return user?.role === 'admin'
-    return true  // public 和 private 对所有登录用户可见
+  // 面包屑历史记录：记录用户访问过的页面路径
+  const [breadcrumbHistory, setBreadcrumbHistory] = useState([{ key: 'dashboard', label: '首页' }])
+  // 记录各分组的展开/折叠状态，默认全部展开
+  const [expandedGroups, setExpandedGroups] = useState(() => {
+    const init = {}
+    allMenuGroups.forEach(g => { init[g.group] = true })
+    return init
   })
+
+  // 当 currentMenu 变化时，追加到面包屑历史（如果不在最后一位）
+  useEffect(() => {
+    if (!currentMenu) return
+    const label = menuLabelMap[currentMenu] || '未知页面'
+    setBreadcrumbHistory(prev => {
+      // 如果最后一个就是当前页面，不重复添加
+      if (prev.length > 0 && prev[prev.length - 1].key === currentMenu) {
+        return prev
+      }
+      // 如果历史中已经存在这个页面，截断到该位置并重新添加
+      const existingIndex = prev.findIndex(item => item.key === currentMenu)
+      if (existingIndex !== -1) {
+        return [...prev.slice(0, existingIndex + 1)]
+      }
+      // 否则追加到历史
+      return [...prev, { key: currentMenu, label }]
+    })
+  }, [currentMenu])
+
+  // 根据角色过滤菜单组：admin=全部, user=非admin菜单
+  const menuGroups = allMenuGroups.map(group => ({
+    ...group,
+    items: group.items.filter(item => {
+      if (item.access === 'admin') return user?.role === 'admin'
+      return true
+    })
+  })).filter(group => group.items.length > 0)  // 隐藏空分组
+
+  // 切换分组展开/折叠 - 手风琴模式：同时只能展开一个
+  const toggleGroup = (groupKey) => {
+    setExpandedGroups(prev => {
+      const isCurrentlyExpanded = prev[groupKey] !== false
+      if (isCurrentlyExpanded) {
+        // 当前已展开，则折叠
+        return { ...prev, [groupKey]: false }
+      } else {
+        // 当前已折叠，则展开当前并折叠其他所有
+        const newState = {}
+        allMenuGroups.forEach(g => { newState[g.group] = false })
+        newState[groupKey] = true
+        return newState
+      }
+    })
+  }
+
+  // 点击子菜单时，展开其所在分组并折叠其他分组（手风琴模式）
+  const handleMenuClick = (key) => {
+    const groupKey = groupKeyMap[key]
+    if (groupKey) {
+      const newState = {}
+      allMenuGroups.forEach(g => { newState[g.group] = false })
+      newState[groupKey] = true
+      setExpandedGroups(newState)
+    }
+    setCurrentMenu(key)
+  }
+
+  // 面包屑点击导航 - 跳转到历史记录中的某个页面
+  const handleBreadcrumbClick = (key, index) => {
+    // 截断历史到点击的位置
+    setBreadcrumbHistory(prev => prev.slice(0, index + 1))
+    setCurrentMenu(key)
+  }
   
   const handleLogout = async () => {
     setShowUserMenu(false)
@@ -67,16 +173,56 @@ export default function AppLayout({ currentMenu, setCurrentMenu, collapsed, setC
         </div>
         
         <nav className="menu">
-          {menuItems.map(item => (
-            <div
-              key={item.key}
-              className={`menu-item ${currentMenu === item.key ? 'active' : ''}`}
-              onClick={() => setCurrentMenu(item.key)}
-            >
-              <span className="menu-icon">{item.icon}</span>
-              {!collapsed && <span className="menu-label">{item.label}</span>}
-            </div>
-          ))}
+          {menuGroups.map(group => {
+            const isExpanded = expandedGroups[group.group] !== false  // 默认展开
+            const hasActiveChild = group.items.some(item => item.key === currentMenu)
+            return (
+              <div key={group.group} className={`menu-group ${hasActiveChild ? 'has-active-child' : ''}`}>
+                {/* 分组标题 - 可点击展开/折叠 */}
+                {!collapsed ? (
+                  <div
+                    className={`menu-group-header ${isExpanded ? 'expanded' : ''} ${hasActiveChild ? 'has-active' : ''}`}
+                    onClick={() => toggleGroup(group.group)}
+                    role="button"
+                    aria-expanded={isExpanded}
+                    tabIndex={0}
+                    onKeyDown={(e) => e.key === 'Enter' && toggleGroup(group.group)}
+                  >
+                    <div className="menu-group-header-content">
+                      <span className="menu-group-arrow">
+                        <svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor">
+                          <path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6z"/>
+                        </svg>
+                      </span>
+                      <span className="menu-group-label">{group.label}</span>
+                    </div>
+                    <span className="menu-group-count">{group.items.length}</span>
+                  </div>
+                ) : (
+                  <div className="menu-group-divider" />
+                )}
+                {/* 子菜单列表 - 带展开/折叠动画 */}
+                <div className={`menu-group-items ${isExpanded ? 'expanded' : 'collapsed'}`}>
+                  <div className="menu-group-items-inner">
+                    {group.items.map(item => (
+                      <div
+                        key={item.key}
+                        className={`menu-item ${currentMenu === item.key ? 'active' : ''}`}
+                        onClick={() => handleMenuClick(item.key)}
+                        title={collapsed ? item.label : undefined}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e) => e.key === 'Enter' && handleMenuClick(item.key)}
+                      >
+                        <span className="menu-icon">{item.icon}</span>
+                        {!collapsed && <span className="menu-label">{item.label}</span>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )
+          })}
         </nav>
         
         {/* 底部收缩按钮 + 用户信息 */}
@@ -112,17 +258,24 @@ export default function AppLayout({ currentMenu, setCurrentMenu, collapsed, setC
 
       {/* 主内容区 */}
       <div className="main">
-        {/* 面包屑导航 - 苹果风格 */}
+        {/* 面包屑导航 - 历史记录模式 */}
         <div className="header apple-header">
           <div className="breadcrumb">
-            {breadcrumbMap[currentMenu]?.map((item, index) => (
-              <span key={index} className="breadcrumb-item-wrapper">
-                {index > 0 && <span className="separator">›</span>}
-                <span className={`breadcrumb-item ${index === breadcrumbMap[currentMenu].length - 1 ? 'current' : ''}`}>
-                  {item}
+            {breadcrumbHistory.map((item, index) => {
+              const isLast = index === breadcrumbHistory.length - 1
+              return (
+                <span key={`${item.key}-${index}`} className="breadcrumb-item-wrapper">
+                  {index > 0 && <span className="separator">›</span>}
+                  <span 
+                    className={`breadcrumb-item ${isLast ? 'current' : 'clickable'}`}
+                    onClick={() => !isLast && handleBreadcrumbClick(item.key, index)}
+                    style={!isLast ? { cursor: 'pointer' } : {}}
+                  >
+                    {item.label}
+                  </span>
                 </span>
-              </span>
-            ))}
+              )
+            })}
           </div>
         </div>
 

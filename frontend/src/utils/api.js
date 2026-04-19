@@ -15,6 +15,20 @@ axios.interceptors.request.use(
 )
 
 // 响应拦截器 - 自动刷新Token
+let isRefreshing = false
+let failedQueue = []
+
+const processQueue = (error, token = null) => {
+  failedQueue.forEach(prom => {
+    if (error) {
+      prom.reject(error)
+    } else {
+      prom.resolve(token)
+    }
+  })
+  failedQueue = []
+}
+
 axios.interceptors.response.use(
   (response) => response,
   async (error) => {
@@ -23,17 +37,47 @@ axios.interceptors.response.use(
       const code = error.response?.data?.code
       if (code === 'token_expired') {
         originalRequest._retry = true
+        
+        if (isRefreshing) {
+          // 如果正在刷新，将请求加入队列
+          return new Promise((resolve, reject) => {
+            failedQueue.push({ resolve, reject })
+          }).then(token => {
+            originalRequest.headers.Authorization = `Bearer ${token}`
+            return axios(originalRequest)
+          }).catch(err => Promise.reject(err))
+        }
+        
+        isRefreshing = true
+        
         try {
           const rt = localStorage.getItem('refresh_token')
-          if (!rt) { localStorage.clear(); window.location.href = '/'; return Promise.reject(error) }
-          const res = await axios.post(`${API_BASE}/auth/refresh`, {}, { headers: { Authorization: `Bearer ${rt}` } })
+          if (!rt) { 
+            localStorage.clear()
+            window.location.href = '/'
+            return Promise.reject(error) 
+          }
+          const res = await axios.post(`${API_BASE}/auth/refresh`, {}, { 
+            headers: { Authorization: `Bearer ${rt}` },
+            _retry: true  // 防止刷新请求本身被重试
+          })
           const { access_token } = res.data
           localStorage.setItem('access_token', access_token)
           originalRequest.headers.Authorization = `Bearer ${access_token}`
+          
+          processQueue(null, access_token)
           return axios(originalRequest)
-        } catch { localStorage.clear(); window.location.href = '/'; return Promise.reject(error) }
+        } catch (refreshError) { 
+          processQueue(refreshError, null)
+          localStorage.clear()
+          window.location.href = '/'
+          return Promise.reject(refreshError)
+        } finally {
+          isRefreshing = false
+        }
       } else if (code === 'token_revoked' || code === 'token_invalid' || code === 'token_missing') {
-        localStorage.clear(); window.location.href = '/'
+        localStorage.clear()
+        window.location.href = '/'
       }
     }
     return Promise.reject(error)
@@ -42,9 +86,11 @@ axios.interceptors.response.use(
 
 // 小马相关API
 export const stockAPI = {
-  getAll: () => axios.get(`${API_BASE}/stocks`),
+  getAll: (params = {}) => axios.get(`${API_BASE}/stocks`, { params }),
   getById: (id) => axios.get(`${API_BASE}/stocks/${id}`),
   add: (data) => axios.post(`${API_BASE}/stocks`, data),
+  delete: (id) => axios.delete(`${API_BASE}/stocks/${id}`),
+  search: (params) => axios.get(`${API_BASE}/stocks/search`, { params }),
   getInfo: (id) => axios.get(`${API_BASE}/stocks/${id}/info`),
   batchFetch: (data) => axios.post(`${API_BASE}/stocks/batch_fetch`, data),
   updateAll: () => axios.post(`${API_BASE}/stocks/update_all`),
@@ -84,7 +130,7 @@ export const alertAPI = {
 
 // 对比分析API
 export const compareAPI = {
-  compare: (stockIds) => axios.post(`${API_BASE}/compare`, { stock_ids: stockIds }),
+  compare: (stockIds) => axios.post(`${API_BASE}/advanced/compare`, { stock_ids: stockIds }),
 }
 
 // 智能选股API
@@ -111,7 +157,7 @@ export const settingsAPI = {
 
 // 财务预报API
 export const forecastAPI = {
-  get: (stockId) => axios.get(`${API_BASE}/forecast/${stockId}`),
+  get: (stockId, params = {}) => axios.get(`${API_BASE}/advanced/forecast/${stockId}`, { params }),
 }
 
 // 龙虎榜API

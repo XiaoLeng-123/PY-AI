@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import axios from 'axios'
 import { toast } from '../components/Toast'
+import Pagination from '../components/Pagination'
+import AppleDatePicker from '../components/AppleDatePicker'
 
 const API_BASE = 'http://127.0.0.1:5000/api'
 
@@ -9,6 +11,9 @@ export default function AuctionPage() {
   const [auctionLoading, setAuctionLoading] = useState(false)
   const [date, setDate] = useState(new Date().toISOString().split('T')[0])
   const [sortBy, setSortBy] = useState('amount')
+  // 分页
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(20)
   
   const loadData = async () => {
     setAuctionLoading(true)
@@ -18,7 +23,21 @@ export default function AuctionPage() {
       })
       setAuctionData(response.data)
     } catch (error) {
-      toast.error('加载集合竞价数据失败')
+      console.error('集合竞价数据加载失败:', error)
+      let errorMsg = '加载集合竞价数据失败'
+      if (error.response?.status === 503) {
+        errorMsg = '数据服务暂时不可用，请稍后重试'
+      } else if (error.response?.data?.message) {
+        errorMsg = error.response.data.message
+      }
+      toast.error(errorMsg)
+      // 设置错误状态，显示友好提示
+      setAuctionData({
+        success: false,
+        data: [],
+        message: errorMsg,
+        date: date
+      })
     } finally {
       setAuctionLoading(false)
     }
@@ -43,12 +62,12 @@ export default function AuctionPage() {
       <div className="card" style={{marginBottom: '24px'}}>
         <div className="auction-controls">
           <div className="control-item">
-            <label className="control-label">日期</label>
-            <input 
-              type="date" 
-              value={date} 
-              onChange={(e) => setDate(e.target.value)}
-              className="apple-input date-input"
+            <AppleDatePicker
+              value={date}
+              onChange={setDate}
+              placeholder="选择日期"
+              width="100%"
+              label="日期"
             />
           </div>
           
@@ -115,9 +134,9 @@ export default function AuctionPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {auctionData.data.map((item, index) => (
+                    {auctionData.data.slice((page - 1) * pageSize, page * pageSize).map((item, index) => (
                       <tr key={index}>
-                        <td><span className="rank-badge">{index + 1}</span></td>
+                        <td><span className="rank-badge">{(page - 1) * pageSize + index + 1}</span></td>
                         <td className="code-cell">{item.code}</td>
                         <td className="name-cell">{item.name}</td>
                         <td className="price-cell">¥{item.price?.toFixed(2)}</td>
@@ -134,6 +153,13 @@ export default function AuctionPage() {
                   </tbody>
                 </table>
               </div>
+              <Pagination
+                total={auctionData.data.length}
+                page={page}
+                pageSize={pageSize}
+                onPageChange={setPage}
+                onPageSizeChange={(s) => { setPageSize(s); setPage(1) }}
+              />
             </>
           ) : (
             <div className="empty-state-large">

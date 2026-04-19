@@ -1,10 +1,13 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect, useCallback } from 'react'
 import axios from 'axios'
 import { toast } from '../components/Toast'
+import Pagination from '../components/Pagination'
+import { stockAPI } from '../utils/api'
+import AppleDatePicker from '../components/AppleDatePicker'
 
 const API_BASE = 'http://127.0.0.1:5000/api'
 
-export default function DataEntryPage({ stocks }) {
+export default function DataEntryPage({ stocks: initialStocks }) {
   // 股票选择状态
   const [selectedStocks, setSelectedStocks] = useState([])
   const [searchText, setSearchText] = useState('')
@@ -22,16 +25,50 @@ export default function DataEntryPage({ stocks }) {
   // 获取结果
   const [fetchResult, setFetchResult] = useState(null)
   
-  // 筛选后的股票列表
-  const safeStocks = stocks || []
-  const filteredStocks = useMemo(() => {
-    if (!searchText) return safeStocks
-    const lower = searchText.toLowerCase()
-    return safeStocks.filter(s => 
-      s.code.toLowerCase().includes(lower) || 
-      s.name.toLowerCase().includes(lower)
-    )
-  }, [safeStocks, searchText])
+  // 后端分页状态
+  const [stocks, setStocks] = useState([])
+  const [total, setTotal] = useState(0)
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(20)
+  const [loading, setLoading] = useState(false)
+  
+  // 从后端加载股票列表（分页+搜索）
+  const loadStocksFromBackend = useCallback(async (currentPage = page, currentPageSize = pageSize, search = searchText) => {
+    setLoading(true)
+    try {
+      const response = await stockAPI.getAll({
+        page: currentPage,
+        page_size: currentPageSize,
+        search: search
+      })
+      const data = response.data || {}
+      setStocks(data.items || [])
+      setTotal(data.total || 0)
+    } catch (error) {
+      console.error('加载股票列表失败:', error)
+      toast.error('加载股票列表失败')
+      setStocks([])
+      setTotal(0)
+    } finally {
+      setLoading(false)
+    }
+  }, [page, pageSize, searchText])
+  
+  // 初始加载和分页/搜索变化时重新加载
+  useEffect(() => {
+    loadStocksFromBackend(page, pageSize, searchText)
+  }, [page, pageSize, searchText, loadStocksFromBackend])
+  
+  // 搜索变化时重置到第1页
+  const handleSearchChange = (value) => {
+    setSearchText(value)
+    setPage(1)
+  }
+  
+  const handlePageSizeChange = (newSize) => {
+    setPageSize(newSize)
+    setPage(1)
+  }
   
   // 切换股票选择（统一使用 Number 类型）
   const toggleStockSelection = (stockId) => {
@@ -47,7 +84,7 @@ export default function DataEntryPage({ stocks }) {
   
   // 智能全选/取消全选
   const toggleSelectAll = () => {
-    const currentIds = filteredStocks.map(s => Number(s.id))
+    const currentIds = stocks.map(s => Number(s.id))
     if (currentIds.length === 0) return
 
     const allSelected = currentIds.every(id => selectedStocks.includes(id))
@@ -163,7 +200,7 @@ export default function DataEntryPage({ stocks }) {
               onClick={toggleSelectAll}
               className="btn-secondary pill-btn btn-sm"
             >
-              {filteredStocks.length > 0 && filteredStocks.every(s => selectedStocks.includes(Number(s.id))) ? '取消全选' : '全选'}
+              {stocks.length > 0 && stocks.every(s => selectedStocks.includes(Number(s.id))) ? '取消全选' : '全选'}
             </button>
           </div>
         </div>
@@ -175,9 +212,10 @@ export default function DataEntryPage({ stocks }) {
             type="text"
             placeholder="搜索股票代码或名称..."
             value={searchText}
-            onChange={(e) => setSearchText(e.target.value)}
+            onChange={(e) => handleSearchChange(e.target.value)}
             className="search-input"
           />
+          {loading && <span style={{ marginLeft: '8px' }}>⏳</span>}
         </div>
         
         {/* 股票列表 - 网格布局 */}
@@ -189,8 +227,8 @@ export default function DataEntryPage({ stocks }) {
           overflowY: 'auto',
           padding: '4px'
         }}>
-          {filteredStocks.length > 0 ? (
-            filteredStocks.map(s => {
+          {stocks.length > 0 ? (
+            stocks.map(s => {
               const idNum = Number(s.id)
               const isSelected = selectedStocks.includes(idNum)
               return (
@@ -247,6 +285,13 @@ export default function DataEntryPage({ stocks }) {
             </div>
           )}
         </div>
+        <Pagination
+          total={total}
+          page={page}
+          pageSize={pageSize}
+          onPageChange={setPage}
+          onPageSizeChange={handlePageSizeChange}
+        />
         
         {/* 分隔线 */}
         <div style={{
@@ -284,23 +329,21 @@ export default function DataEntryPage({ stocks }) {
             gap: '16px'
           }}>
             <div>
-              <label style={{ fontSize: '13px', fontWeight: '600', color: '#666', marginBottom: '8px', display: 'block' }}>开始日期</label>
-              <input
-                type="date"
+              <AppleDatePicker
                 value={dateRange.startDate}
-                onChange={(e) => setDateRange({ ...dateRange, startDate: e.target.value })}
-                className="apple-input"
-                style={{ width: '100%' }}
+                onChange={(date) => setDateRange({ ...dateRange, startDate: date })}
+                placeholder="选择开始日期"
+                width="100%"
+                label="开始日期"
               />
             </div>
             <div>
-              <label style={{ fontSize: '13px', fontWeight: '600', color: '#666', marginBottom: '8px', display: 'block' }}>结束日期</label>
-              <input
-                type="date"
+              <AppleDatePicker
                 value={dateRange.endDate}
-                onChange={(e) => setDateRange({ ...dateRange, endDate: e.target.value })}
-                className="apple-input"
-                style={{ width: '100%' }}
+                onChange={(date) => setDateRange({ ...dateRange, endDate: date })}
+                placeholder="选择结束日期"
+                width="100%"
+                label="结束日期"
               />
             </div>
           </div>

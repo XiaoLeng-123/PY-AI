@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { stockAPI } from '../../utils/api'
 import StockChart from '../Charts/StockChart'
 import RealtimePrice from '../Charts/RealtimePrice'
 import axios from 'axios'
 import { exportPriceData } from '../../utils/export'
 
-const DataViewPage = ({ stocks, toast }) => {
+const DataViewPage = ({ stocks: initialStocks, toast }) => {
   const [selectedStock, setSelectedStock] = useState(null)
   const [priceData, setPriceData] = useState([])
   const [indicators, setIndicators] = useState({})
@@ -18,12 +18,45 @@ const DataViewPage = ({ stocks, toast }) => {
   const [stockDropdownOpen, setStockDropdownOpen] = useState(false)
   const [stockSearchText, setStockSearchText] = useState('')
   const [stockDropdownRef, setStockDropdownRef] = useState(null)
+  
+  // 后端分页状态
+  const [dropdownStocks, setDropdownStocks] = useState([])
+  const [dropdownTotal, setDropdownTotal] = useState(0)
+  const [dropdownPage, setDropdownPage] = useState(1)
+  const [dropdownLoading, setDropdownLoading] = useState(false)
 
   useEffect(() => {
-    if (stocks && stocks.length > 0 && !selectedStock) {
-      setSelectedStock(stocks[0])
+    // 不再默认选择股票，等待用户手动选择
+    // if (initialStocks && initialStocks.length > 0 && !selectedStock) {
+    //   setSelectedStock(initialStocks[0])
+    // }
+  }, [initialStocks])
+  
+  // 从后端加载下拉框股票列表
+  const loadDropdownStocks = useCallback(async () => {
+    if (!stockDropdownOpen) return
+    setDropdownLoading(true)
+    try {
+      const response = await stockAPI.getAll({
+        page: dropdownPage,
+        page_size: 20,
+        search: stockSearchText
+      })
+      const data = response.data || {}
+      setDropdownStocks(data.items || [])
+      setDropdownTotal(data.total || 0)
+    } catch (error) {
+      console.error('加载股票列表失败:', error)
+      setDropdownStocks([])
+      setDropdownTotal(0)
+    } finally {
+      setDropdownLoading(false)
     }
-  }, [stocks])
+  }, [stockDropdownOpen, dropdownPage, stockSearchText])
+  
+  useEffect(() => {
+    loadDropdownStocks()
+  }, [loadDropdownStocks])
 
   // 点击外部关闭下拉框
   useEffect(() => {
@@ -90,14 +123,8 @@ const DataViewPage = ({ stocks, toast }) => {
     }
   }
 
-  // 股票模糊搜索
-  const filteredStocks = stockSearchText.trim()
-    ? stocks.filter(s => 
-        s.code.toLowerCase().includes(stockSearchText.toLowerCase().trim()) || 
-        s.name.toLowerCase().includes(stockSearchText.toLowerCase().trim()) ||
-        s.code.includes(stockSearchText.trim())
-      )
-    : stocks.slice(0, 100) // 默认只显示前100只
+  // 使用后端返回的下拉框数据
+  const filteredStocks = dropdownStocks
 
   const handleSelectStock = (stock) => {
     setSelectedStock(stock)
@@ -154,10 +181,11 @@ const DataViewPage = ({ stocks, toast }) => {
           {/* 股票选择 - WatchlistPage样式 */}
           <div>
             <label style={{ fontSize: '13px', fontWeight: '600', color: '#666', marginBottom: '8px', display: 'block' }}>选择股票</label>
-            <div ref={setStockDropdownRef} className="apple-dropdown-wrapper">
+            <div ref={setStockDropdownRef} className="apple-dropdown-wrapper" style={{ minWidth: '300px' }}>
               <div
                 onClick={() => setStockDropdownOpen(!stockDropdownOpen)}
                 className="apple-select-trigger"
+                style={{ minWidth: '300px' }}
               >
                 <div className="select-content">
                   {selectedStock ? (
@@ -178,10 +206,11 @@ const DataViewPage = ({ stocks, toast }) => {
                       type="text"
                       placeholder="搜索代码或名称"
                       value={stockSearchText}
-                      onChange={(e) => setStockSearchText(e.target.value)}
+                      onChange={(e) => { setStockSearchText(e.target.value); setDropdownPage(1) }}
                       className="apple-input search-input"
                       autoFocus
                     />
+                    {dropdownLoading && <span style={{ marginLeft: '8px' }}>⏳</span>}
                   </div>
                   
                   <div className="dropdown-list">
@@ -207,9 +236,51 @@ const DataViewPage = ({ stocks, toast }) => {
                     )}
                   </div>
                   
+                  {/* 分页控制 */}
+                  {dropdownTotal > 20 && (
+                    <div className="dropdown-pagination" style={{
+                      display: 'flex',
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                      gap: '8px',
+                      padding: '8px 16px',
+                      borderTop: '1px solid rgba(0,0,0,0.06)'
+                    }}>
+                      <button 
+                        onClick={() => setDropdownPage(p => Math.max(1, p - 1))}
+                        disabled={dropdownPage === 1 || dropdownLoading}
+                        style={{ 
+                          padding: '4px 12px', 
+                          border: '1px solid rgba(0,0,0,0.1)',
+                          borderRadius: '6px',
+                          background: dropdownPage === 1 ? '#f5f5f5' : '#fff',
+                          cursor: dropdownPage === 1 ? 'not-allowed' : 'pointer'
+                        }}
+                      >
+                        ← 上一页
+                      </button>
+                      <span style={{ fontSize: '13px', color: '#666' }}>
+                        第 {dropdownPage} 页 / 共 {Math.ceil(dropdownTotal / 20)} 页
+                      </span>
+                      <button 
+                        onClick={() => setDropdownPage(p => p + 1)}
+                        disabled={dropdownPage >= Math.ceil(dropdownTotal / 20) || dropdownLoading}
+                        style={{ 
+                          padding: '4px 12px', 
+                          border: '1px solid rgba(0,0,0,0.1)',
+                          borderRadius: '6px',
+                          background: dropdownPage >= Math.ceil(dropdownTotal / 20) ? '#f5f5f5' : '#fff',
+                          cursor: dropdownPage >= Math.ceil(dropdownTotal / 20) ? 'not-allowed' : 'pointer'
+                        }}
+                      >
+                        下一页 →
+                      </button>
+                    </div>
+                  )}
+                  
                   {filteredStocks.length > 0 && (
                     <div className="dropdown-stats">
-                      共 <strong>{filteredStocks.length}</strong> 只股票
+                      共 <strong>{dropdownTotal}</strong> 只股票，当前显示 {filteredStocks.length} 只
                     </div>
                   )}
                 </div>

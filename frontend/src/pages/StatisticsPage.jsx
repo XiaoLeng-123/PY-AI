@@ -1,35 +1,57 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import axios from 'axios'
+import { stockAPI } from '../utils/api'
 import { getCache, setCache } from '../utils/cache'
 import { exportStatsData } from '../utils/export'
 import { toast } from '../components/Toast'
 
 const API_BASE = 'http://127.0.0.1:5000/api'
 
-export default function StatisticsPage({ selectedStock, stocks }) {
+export default function StatisticsPage({ selectedStock, stocks: initialStocks }) {
   const [stats, setStats] = useState(null)
   const [statsLoading, setStatsLoading] = useState(false)
   const [activeTab, setActiveTab] = useState('overview')
   const [localSelectedStock, setLocalSelectedStock] = useState(null)
+  
+  // 下拉框状态
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchText, setSearchText] = useState('')
+  const [dropdownStocks, setDropdownStocks] = useState([])
+  const [dropdownTotal, setDropdownTotal] = useState(0)
+  const [dropdownPage, setDropdownPage] = useState(1)
+  const [dropdownLoading, setDropdownLoading] = useState(false)
   const dropdownRef = useRef(null)
-  
-  useEffect(() => {
-    if (stocks && stocks.length > 0 && !localSelectedStock) {
-      setLocalSelectedStock(stocks[0].id.toString())
-    }
-  }, [stocks])
   
   const currentStock = localSelectedStock || selectedStock
   
-  const filteredStocks = searchText.trim()
-    ? stocks.filter(s => 
-        s.code.toLowerCase().includes(searchText.toLowerCase().trim()) || 
-        s.name.toLowerCase().includes(searchText.toLowerCase().trim()) ||
-        s.code.includes(searchText.trim())
-      )
-    : stocks
+  // 从后端加载下拉框股票列表
+  const loadDropdownStocks = useCallback(async () => {
+    if (!searchOpen) return
+    setDropdownLoading(true)
+    try {
+      const response = await stockAPI.getAll({
+        page: dropdownPage,
+        page_size: 20,
+        search: searchText
+      })
+      const data = response.data || {}
+      setDropdownStocks(data.items || [])
+      setDropdownTotal(data.total || 0)
+    } catch (error) {
+      console.error('加载股票列表失败:', error)
+      setDropdownStocks([])
+      setDropdownTotal(0)
+    } finally {
+      setDropdownLoading(false)
+    }
+  }, [searchOpen, dropdownPage, searchText])
+  
+  useEffect(() => {
+    loadDropdownStocks()
+  }, [loadDropdownStocks])
+  
+  // 使用后端返回的数据
+  const filteredStocks = dropdownStocks
   
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -80,48 +102,16 @@ export default function StatisticsPage({ selectedStock, stocks }) {
       toast.warning('没有可导出的数据')
       return
     }
-    const result = exportStatsData(stats, stocks.find(s => s.id === Number(currentStock)))
+    const currentStockData = stock || initialStocks?.find(s => s.id === Number(currentStock))
+    const result = exportStatsData(stats, currentStockData)
     if (result.success) {
       toast.success('导出成功')
     }
   }
   
-  if (!currentStock) {
-    return (
-      <div className="page-content">
-        <div className="empty-state-large">
-          <div className="empty-icon">📉</div>
-          <h4>请先选择股票</h4>
-          <p>在左侧菜单选择一只股票查看统计数据</p>
-        </div>
-      </div>
-    )
-  }
+  // 页面主渲染逻辑
   
-  if (statsLoading) {
-    return (
-      <div className="page-content">
-        <div className="loading-state">
-          <div className="spinner">⏳</div>
-          <div>加载中...</div>
-        </div>
-      </div>
-    )
-  }
-  
-  if (!stats) {
-    return (
-      <div className="page-content">
-        <div className="empty-state-large">
-          <div className="empty-icon">📊</div>
-          <h4>暂无数据</h4>
-          <p>该股票暂无统计数据</p>
-        </div>
-      </div>
-    )
-  }
-  
-  const stock = stocks.find(s => s.id === Number(currentStock))
+  const stock = filteredStocks.find(s => s.id === Number(currentStock)) || initialStocks?.find(s => s.id === Number(currentStock))
   
   return (
     <div className="page-content">
@@ -136,10 +126,11 @@ export default function StatisticsPage({ selectedStock, stocks }) {
         </div>
         <div className="header-right">
           {/* 股票选择下拉框 - WatchlistPage样式 */}
-          <div ref={dropdownRef} className="apple-dropdown-wrapper" style={{ position: 'relative', zIndex: 10000 }}>
+          <div ref={dropdownRef} className="apple-dropdown-wrapper" style={{ minWidth: '300px' }}>
             <div
               onClick={() => setSearchOpen(!searchOpen)}
               className="apple-select-trigger"
+              style={{ minWidth: '300px' }}
             >
               <div className="select-content">
                 {stock ? (
@@ -160,10 +151,11 @@ export default function StatisticsPage({ selectedStock, stocks }) {
                     type="text"
                     placeholder="搜索代码或名称"
                     value={searchText}
-                    onChange={(e) => setSearchText(e.target.value)}
+                    onChange={(e) => { setSearchText(e.target.value); setDropdownPage(1) }}
                     className="apple-input search-input"
                     autoFocus
                   />
+                  {dropdownLoading && <span style={{ marginLeft: '8px' }}>⏳</span>}
                 </div>
                 
                 <div className="dropdown-list">
@@ -194,9 +186,51 @@ export default function StatisticsPage({ selectedStock, stocks }) {
                   )}
                 </div>
                 
+                {/* 分页控制 */}
+                {dropdownTotal > 20 && (
+                  <div className="dropdown-pagination" style={{
+                    display: 'flex',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    gap: '8px',
+                    padding: '8px 16px',
+                    borderTop: '1px solid rgba(0,0,0,0.06)'
+                  }}>
+                    <button 
+                      onClick={() => setDropdownPage(p => Math.max(1, p - 1))}
+                      disabled={dropdownPage === 1 || dropdownLoading}
+                      style={{ 
+                        padding: '4px 12px', 
+                        border: '1px solid rgba(0,0,0,0.1)',
+                        borderRadius: '6px',
+                        background: dropdownPage === 1 ? '#f5f5f5' : '#fff',
+                        cursor: dropdownPage === 1 ? 'not-allowed' : 'pointer'
+                      }}
+                    >
+                      ← 上一页
+                    </button>
+                    <span style={{ fontSize: '13px', color: '#666' }}>
+                      第 {dropdownPage} 页 / 共 {Math.ceil(dropdownTotal / 20)} 页
+                    </span>
+                    <button 
+                      onClick={() => setDropdownPage(p => p + 1)}
+                      disabled={dropdownPage >= Math.ceil(dropdownTotal / 20) || dropdownLoading}
+                      style={{ 
+                        padding: '4px 12px', 
+                        border: '1px solid rgba(0,0,0,0.1)',
+                        borderRadius: '6px',
+                        background: dropdownPage >= Math.ceil(dropdownTotal / 20) ? '#f5f5f5' : '#fff',
+                        cursor: dropdownPage >= Math.ceil(dropdownTotal / 20) ? 'not-allowed' : 'pointer'
+                      }}
+                    >
+                      下一页 →
+                    </button>
+                  </div>
+                )}
+                
                 {filteredStocks.length > 0 && (
                   <div className="dropdown-stats">
-                    共 <strong>{filteredStocks.length}</strong> 只股票
+                    共 <strong>{dropdownTotal}</strong> 只股票，当前显示 {filteredStocks.length} 只
                   </div>
                 )}
               </div>
@@ -221,8 +255,49 @@ export default function StatisticsPage({ selectedStock, stocks }) {
         <button className={`segmented-btn ${activeTab === 'volume' ? 'active' : ''}`} onClick={() => setActiveTab('volume')}>💹 量价</button>
       </div>
       
+      {/* 未选择股票提示 */}
+      {!currentStock && (
+        <div className="apple-card" style={{
+          animation: 'fadeInUp 0.5s ease 0.2s',
+          animationFillMode: 'backwards'
+        }}>
+          <div className="empty-state-large">
+            <div className="empty-icon">📉</div>
+            <h4>请先选择股票</h4>
+            <p>点击上方下拉框选择一只股票查看统计数据</p>
+          </div>
+        </div>
+      )}
+      
+      {/* 加载中 */}
+      {currentStock && statsLoading && (
+        <div className="apple-card" style={{
+          animation: 'fadeInUp 0.5s ease 0.2s',
+          animationFillMode: 'backwards'
+        }}>
+          <div className="loading-state">
+            <div className="spinner">⏳</div>
+            <div>加载中...</div>
+          </div>
+        </div>
+      )}
+      
+      {/* 暂无数据 */}
+      {currentStock && !statsLoading && !stats && (
+        <div className="apple-card" style={{
+          animation: 'fadeInUp 0.5s ease 0.2s',
+          animationFillMode: 'backwards'
+        }}>
+          <div className="empty-state-large">
+            <div className="empty-icon">📊</div>
+            <h4>暂无数据</h4>
+            <p>该股票暂无统计数据</p>
+          </div>
+        </div>
+      )}
+      
       {/* 概览 */}
-      {activeTab === 'overview' && (
+      {currentStock && !statsLoading && stats && activeTab === 'overview' && (
         <div className="dashboard-stats-grid" style={{
           animation: 'fadeInUp 0.5s ease 0.2s',
           animationFillMode: 'backwards'
@@ -310,7 +385,7 @@ export default function StatisticsPage({ selectedStock, stocks }) {
       )}
       
       {/* 收益 */}
-      {activeTab === 'returns' && (
+      {currentStock && !statsLoading && stats && activeTab === 'returns' && (
         <div className="dashboard-stats-grid" style={{
           animation: 'fadeInUp 0.5s ease 0.2s',
           animationFillMode: 'backwards'
@@ -398,7 +473,7 @@ export default function StatisticsPage({ selectedStock, stocks }) {
       )}
       
       {/* 风险 */}
-      {activeTab === 'risk' && (
+      {currentStock && !statsLoading && stats && activeTab === 'risk' && (
         <div className="dashboard-stats-grid" style={{
           animation: 'fadeInUp 0.5s ease 0.2s',
           animationFillMode: 'backwards'
@@ -482,7 +557,7 @@ export default function StatisticsPage({ selectedStock, stocks }) {
       )}
       
       {/* 均线 */}
-      {activeTab === 'ma' && (
+      {currentStock && !statsLoading && stats && activeTab === 'ma' && (
         <div className="dashboard-stats-grid" style={{
           animation: 'fadeInUp 0.5s ease 0.2s',
           animationFillMode: 'backwards'
@@ -565,7 +640,7 @@ export default function StatisticsPage({ selectedStock, stocks }) {
         </div>
       )}
       {/* 量价分析 */}
-      {activeTab === 'volume' && (
+      {currentStock && !statsLoading && stats && activeTab === 'volume' && (
         <div className="dashboard-stats-grid" style={{
           animation: 'fadeInUp 0.5s ease 0.2s',
           animationFillMode: 'backwards'

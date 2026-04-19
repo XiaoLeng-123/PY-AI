@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import axios from 'axios'
 import { toast } from '../components/Toast'
+import Pagination from '../components/Pagination'
 
 const API_BASE = 'http://127.0.0.1:5000/api'
 
@@ -12,6 +13,9 @@ export default function SectorAnalysisPage() {
   const [selectedSector, setSelectedSector] = useState(null)
   const [sectorStocks, setSectorStocks] = useState([])
   const [showStocksModal, setShowStocksModal] = useState(false)
+  // 分页（成分股弹窗用）
+  const [sectorPage, setSectorPage] = useState(1)
+  const [sectorPageSize, setSectorPageSize] = useState(20)
   const [sortBy, setSortBy] = useState('change_pct') // change_pct, amount, main_net_inflow
   const [filterType, setFilterType] = useState('all') // all, rising, falling
   
@@ -60,6 +64,7 @@ export default function SectorAnalysisPage() {
         setSectorStocks(response.data.stocks)
         setSelectedSector({ code: sectorCode, name: sectorName })
         setShowStocksModal(true)
+        setSectorPage(1) // 打开弹窗时重置分页
       } else {
         toast.error(response.data.message || '加载成分股失败')
       }
@@ -309,7 +314,7 @@ export default function SectorAnalysisPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {sectorStocks.map((stock, i) => (
+                    {sectorStocks.slice((sectorPage - 1) * sectorPageSize, sectorPage * sectorPageSize).map((stock, i) => (
                       <tr key={i}>
                         <td>{stock.code}</td>
                         <td><strong>{stock.name}</strong></td>
@@ -329,6 +334,13 @@ export default function SectorAnalysisPage() {
                   暂无成分股数据
                 </div>
               )}
+              <Pagination
+                total={sectorStocks.length}
+                page={sectorPage}
+                pageSize={sectorPageSize}
+                onPageChange={setSectorPage}
+                onPageSizeChange={(s) => { setSectorPageSize(s); setSectorPage(1) }}
+              />
             </div>
           </div>
         </div>

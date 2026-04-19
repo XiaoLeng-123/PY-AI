@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import axios from 'axios'
 import { toast } from '../components/Toast'
+import AppleDatePicker from '../components/AppleDatePicker'
 
 const API_BASE = 'http://127.0.0.1:5000/api'
 
@@ -8,7 +9,7 @@ export default function AiAnalysisPage({ selectedStock, stocks }) {
   const [aiQuestion, setAiQuestion] = useState('')
   const [aiAnswer, setAiAnswer] = useState('')
   const [aiAnalyzing, setAiAnalyzing] = useState(false)
-  const [aiQueryDate, setAiQueryDate] = useState('')
+  const [aiQueryDate, setAiQueryDate] = useState(new Date().toISOString().split('T')[0])
   
   const handleAiAnalyze = async () => {
     if (!selectedStock) {
@@ -88,12 +89,12 @@ export default function AiAnalysisPage({ selectedStock, stocks }) {
         </div>
         
         <div className="ai-input-group">
-          <label className="control-label">分析日期（可选）</label>
-          <input
-            type="date"
+          <AppleDatePicker
             value={aiQueryDate}
-            onChange={(e) => setAiQueryDate(e.target.value)}
-            className="apple-input date-input"
+            onChange={setAiQueryDate}
+            placeholder="选择分析日期"
+            width="100%"
+            label="分析日期（可选）"
           />
         </div>
         

@@ -1175,3 +1175,328 @@ def screen_stocks():
             'results': [],
             'count': 0
         }), 500
+
+# ==================== 财务预报 ====================
+
+@advanced_bp.route('/forecast/<int:stock_id>', methods=['GET'])
+def get_financial_forecast(stock_id):
+    """获取财务报表分析数据 - 从网络 API获取真实财务数据"""
+    try:
+        from app.services.financial_api import get_financial_reports
+        from flask import request
+        
+        # 获取日期参数（可选）
+        report_date = request.args.get('date', '')
+        
+        stock = Stock.query.get_or_404(stock_id)
+        
+        # 从东方财富获取真实财务报表数据
+        print(f"正在获取 {stock.code} 的财务报表数据...")
+        financial_data = get_financial_reports(stock.code)
+        
+        if not financial_data or len(financial_data) == 0:
+            return jsonify({'error': '暂无财务数据'}), 404
+        
+        # 如果指定了日期，查找最接近的报告期
+        if report_date:
+            target_report = None
+            closest_diff = None
+            for report in financial_data:
+                report_dt = report.get('REPORT_DATE', '')
+                if report_dt:
+                    # 简单字符串比较，寻找最接近的日期
+                    diff = abs(len(report_dt) - len(report_date)) + sum(1 for a, b in zip(report_dt, report_date) if a != b)
+                    if closest_diff is None or diff < closest_diff:
+                        closest_diff = diff
+                        target_report = report
+            latest_report = target_report if target_report else financial_data[0]
+        else:
+            # 获取最新一期财报
+            latest_report = financial_data[0]
+        
+        # 解析关键财务指标
+        result = {
+            'stock_id': stock.id,
+            'stock_code': stock.code,
+            'stock_name': stock.name,
+            'report_date': latest_report.get('REPORT_DATE', ''),
+            
+            # 盈利能力
+            'roe': latest_report.get('ROE', 0),
+            'roa': latest_report.get('ROA', 0),
+            'gross_profit_margin': latest_report.get('GROSS_PROFIT_MARGIN', 0),
+            'net_profit_margin': latest_report.get('NET_PROFIT_MARGIN', 0),
+            
+            # 成长能力
+            'revenue': latest_report.get('TOTAL_REVENUE_TTM', 0),
+            'net_profit': latest_report.get('PARENT_NETPROFIT_TTM', 0),
+            'revenue_yoy': latest_report.get('TOTAL_REVENUE_YOY', 0),
+            'profit_yoy': latest_report.get('PARENT_NETPROFIT_YOY', 0),
+            
+            # 偿债能力
+            'debt_ratio': latest_report.get('ASSET_LIABILITY_RATIO', 0),
+            'current_ratio': latest_report.get('CURRENT_RATIO', 0),
+            'quick_ratio': latest_report.get('QUICK_RATIO', 0),
+            
+            # 营运能力
+            'inventory_turnover': latest_report.get('INVENTORY_TURNOVER', 0),
+            'receivables_turnover': latest_report.get('AR_TURNOVER', 0),
+            'total_asset_turnover': latest_report.get('TOTAL_ASSET_TURNOVER', 0),
+            
+            # 每股指标
+            'eps': latest_report.get('EPS', 0),
+            'bps': latest_report.get('BPS', 0),
+            
+            # 现金流
+            'operating_cash_flow': latest_report.get('OPERATE_CASH_FLOW', 0),
+        }
+        
+        # 财务健康评分
+        score = 0
+        
+        if result['roe'] > 15: score += 25
+        elif result['roe'] > 10: score += 15
+        elif result['roe'] > 5: score += 5
+        
+        if result['gross_profit_margin'] > 30: score += 25
+        elif result['gross_profit_margin'] > 20: score += 15
+        elif result['gross_profit_margin'] > 10: score += 5
+        
+        if result['debt_ratio'] < 40: score += 25
+        elif result['debt_ratio'] < 60: score += 15
+        elif result['debt_ratio'] < 70: score += 5
+        
+        if result['revenue_yoy'] > 20: score += 25
+        elif result['revenue_yoy'] > 10: score += 15
+        elif result['revenue_yoy'] > 0: score += 5
+        
+        result['financial_score'] = score
+        
+        if score >= 80:
+            result['rating'] = '优秀'
+            result['rating_color'] = '#52c41a'
+        elif score >= 60:
+            result['rating'] = '良好'
+            result['rating_color'] = '#1890ff'
+        elif score >= 40:
+            result['rating'] = '一般'
+            result['rating_color'] = '#faad14'
+        else:
+            result['rating'] = '较差'
+            result['rating_color'] = '#f5222d'
+        
+        print(f"✅ 成功获取财务数据")
+        return jsonify(result)
+        
+    except Exception as e:
+        print(f"获取财务预报失败: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': f'获取数据失败: {str(e)}'}), 500
+        
+        # 最新价格
+        latest_price = prices[-1].close_price
+        
+        # 计算涨跌幅
+        first_price = prices[0].close_price
+        total_return = ((latest_price - first_price) / first_price) * 100
+        
+        # 计算胜率
+        up_days = 0
+        down_days = 0
+        for i in range(1, len(prices)):
+            if prices[i].close_price > prices[i-1].close_price:
+                up_days += 1
+            else:
+                down_days += 1
+        
+        total_days = up_days + down_days
+        win_rate = (up_days / total_days * 100) if total_days > 0 else 0
+        
+        # 计算最大回撤
+        peak = prices[0].close_price
+        max_drawdown = 0
+        for price in prices:
+            if price.close_price > peak:
+                peak = price.close_price
+            drawdown = ((peak - price.close_price) / peak) * 100
+            if drawdown > max_drawdown:
+                max_drawdown = drawdown
+        
+        # 计算波动率
+        returns = []
+        for i in range(1, len(prices)):
+            ret = (prices[i].close_price - prices[i-1].close_price) / prices[i-1].close_price
+            returns.append(ret)
+        
+        if len(returns) > 0:
+            avg_return = sum(returns) / len(returns)
+            variance = sum((r - avg_return) ** 2 for r in returns) / len(returns)
+            daily_volatility = (variance ** 0.5) * 100
+            annualized_volatility = daily_volatility * (252 ** 0.5)  # 年化
+        else:
+            annualized_volatility = 0
+        
+        # 计算夏普比率
+        if annualized_volatility > 0:
+            annualized_return = avg_return * 252 * 100
+            risk_free_rate = 3.0  # 无风险利率
+            sharpe_ratio = (annualized_return - risk_free_rate) / annualized_volatility
+        else:
+            sharpe_ratio = 0
+        
+        # 计算均线
+        prices_list = [p.close_price for p in prices]
+        ma5 = prices_list[-5] if len(prices_list) >= 5 else prices_list[-1]
+        ma10 = prices_list[-10] if len(prices_list) >= 10 else prices_list[-1]
+        ma20 = prices_list[-20] if len(prices_list) >= 20 else prices_list[-1]
+        
+        # 计算RSI
+        gains = []
+        losses = []
+        for i in range(1, min(15, len(prices_list))):
+            change = prices_list[i] - prices_list[i-1]
+            if change > 0:
+                gains.append(change)
+                losses.append(0)
+            else:
+                gains.append(0)
+                losses.append(abs(change))
+        
+        if len(gains) >= 14:
+            avg_gain = sum(gains[-14:]) / 14
+            avg_loss = sum(losses[-14:]) / 14
+            if avg_loss == 0:
+                rsi = 100
+            else:
+                rs = avg_gain / avg_loss
+                rsi = 100 - (100 / (1 + rs))
+        else:
+            rsi = 50
+        
+        # 支撑位和阻力位
+        support = min(prices_list[-20:])  # 近20日最低价作为支撑
+        resistance = max(prices_list[-20:])  # 近20日最高价作为阻力
+        
+        # 趋势判断
+        if ma5 > ma10 > ma20:
+            trend = '多头排列'
+        elif ma5 < ma10 < ma20:
+            trend = '空头排列'
+        else:
+            trend = '震荡整理'
+        
+        # 近期收益
+        if len(prices_list) >= 5:
+            return_5d = ((prices_list[-1] - prices_list[-5]) / prices_list[-5]) * 100
+        else:
+            return_5d = 0
+            
+        if len(prices_list) >= 10:
+            return_10d = ((prices_list[-1] - prices_list[-10]) / prices_list[-10]) * 100
+        else:
+            return_10d = 0
+        
+        return jsonify({
+            'stock_id': stock.id,
+            'stock_code': stock.code,
+            'stock_name': stock.name,
+            'latest_price': latest_price,
+            'total_return': round(total_return, 2),
+            'win_rate': round(win_rate, 1),
+            'up_days': up_days,
+            'down_days': down_days,
+            'max_drawdown': round(max_drawdown, 2),
+            'annualized_volatility': round(annualized_volatility, 2),
+            'sharpe_ratio': round(sharpe_ratio, 2),
+            'rsi': round(rsi, 2),
+            'ma5': round(ma5, 2),
+            'ma10': round(ma10, 2),
+            'ma20': round(ma20, 2),
+            'support': round(support, 2),
+            'resistance': round(resistance, 2),
+            'trend': trend,
+            'return_5d': round(return_5d, 2),
+            'return_10d': round(return_10d, 2)
+        })
+        
+    except Exception as e:
+        print(f"获取财务预报失败: {str(e)}")
+        return jsonify({'error': f'获取数据失败: {str(e)}'}), 500
+
+# ==================== 对比分析 ====================
+
+@advanced_bp.route('/compare', methods=['POST'])
+def compare_stocks():
+    """对比多只股票"""
+    try:
+        data = request.json
+        stock_ids = data.get('stock_ids', [])
+        
+        if not stock_ids or len(stock_ids) < 2:
+            return jsonify({'error': '请至少选择2只股票'}), 400
+        
+        if len(stock_ids) > 5:
+            return jsonify({'error': '最多对比5只股票'}), 400
+        
+        stocks_data = []
+        
+        for stock_id in stock_ids:
+            stock = Stock.query.get(stock_id)
+            if not stock:
+                continue
+            
+            # 获取近30天的价格数据
+            thirty_days_ago = datetime.utcnow() - timedelta(days=30)
+            prices = StockPrice.query.filter(
+                StockPrice.stock_id == stock_id,
+                StockPrice.date >= thirty_days_ago
+            ).order_by(StockPrice.date.asc()).all()
+            
+            if not prices:
+                continue
+            
+            # 计算指标
+            current_price = prices[-1].close_price
+            first_price = prices[0].close_price
+            change_30d = ((current_price - first_price) / first_price) * 100
+            
+            volumes = [p.volume for p in prices if p.volume]
+            avg_volume = sum(volumes) / len(volumes) if volumes else 0
+            
+            prices_list = [p.close_price for p in prices]
+            max_price = max(prices_list)
+            min_price = min(prices_list)
+            
+            # 计算波动率
+            if len(prices_list) > 1:
+                returns = [(prices_list[i] - prices_list[i-1]) / prices_list[i-1] 
+                          for i in range(1, len(prices_list))]
+                avg_return = sum(returns) / len(returns)
+                variance = sum((r - avg_return) ** 2 for r in returns) / len(returns)
+                volatility = (variance ** 0.5) * 100  # 转换为百分比
+            else:
+                volatility = 0
+            
+            stocks_data.append({
+                'stock_id': stock.id,
+                'stock_code': stock.code,
+                'stock_name': stock.name,
+                'market': stock.market,
+                'current_price': current_price,
+                'change_30d': change_30d,
+                'avg_volume': avg_volume,
+                'volatility': volatility,
+                'max_price': max_price,
+                'min_price': min_price,
+                'data_points': len(prices)
+            })
+        
+        return jsonify({
+            'stocks': stocks_data,
+            'count': len(stocks_data)
+        })
+        
+    except Exception as e:
+        print(f"对比分析失败: {str(e)}")
+        return jsonify({'error': f'对比失败: {str(e)}'}), 500

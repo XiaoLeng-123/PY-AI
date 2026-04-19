@@ -1,5 +1,6 @@
-import React, { useState } from 'react'
-import { portfolioAPI } from '../../utils/api'
+import React, { useState, useEffect, useCallback } from 'react'
+import { portfolioAPI, stockAPI } from '../../utils/api'
+import AppleDatePicker from '../AppleDatePicker'
 
 const PortfolioPage = ({ stocks, toast }) => {
   const [portfolioData, setPortfolioData] = useState(null)
@@ -12,8 +13,54 @@ const PortfolioPage = ({ stocks, toast }) => {
     buy_date: new Date().toISOString().split('T')[0],
     notes: ''
   })
+  
+  // 股票下拉框状态
+  const [stockDropdownOpen, setStockDropdownOpen] = useState(false)
+  const [stockSearchText, setStockSearchText] = useState('')
+  const [stockDropdownRef, setStockDropdownRef] = useState(null)
+  const [dropdownStocks, setDropdownStocks] = useState([])
+  const [dropdownTotal, setDropdownTotal] = useState(0)
+  const [dropdownPage, setDropdownPage] = useState(1)
+  const [dropdownLoading, setDropdownLoading] = useState(false)
 
-  // 加载持仓数据
+  
+  // 从后端加载下拉框股票列表
+  const loadDropdownStocks = useCallback(async () => {
+    if (!stockDropdownOpen) return
+    setDropdownLoading(true)
+    try {
+      const response = await stockAPI.getAll({
+        page: dropdownPage,
+        page_size: 20,
+        search: stockSearchText
+      })
+      const data = response.data || {}
+      setDropdownStocks(data.items || [])
+      setDropdownTotal(data.total || 0)
+    } catch (error) {
+      console.error('加载股票列表失败:', error)
+      setDropdownStocks([])
+      setDropdownTotal(0)
+    } finally {
+      setDropdownLoading(false)
+    }
+  }, [stockDropdownOpen, dropdownPage, stockSearchText])
+  
+  useEffect(() => {
+    loadDropdownStocks()
+  }, [loadDropdownStocks])
+  
+  // 点击外部关闭下拉框
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (stockDropdownRef && !stockDropdownRef.contains(e.target)) {
+        setStockDropdownOpen(false)
+        setStockSearchText('')
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [stockDropdownRef])
   const loadPortfolio = async () => {
     setPortfolioLoading(true)
     try {
@@ -225,15 +272,123 @@ const PortfolioPage = ({ stocks, toast }) => {
                   <span className="label-icon">📊</span>
                   选择股票
                 </label>
-                <select 
-                  value={form.stock_id} 
-                  onChange={(e) => setForm({...form, stock_id: e.target.value})} 
-                  className="apple-select"
-                  required
-                >
-                  <option value="">请选择股票</option>
-                  {stocks.map(s => <option key={s.id} value={s.id}>{s.code} - {s.name}</option>)}
-                </select>
+                <div ref={setStockDropdownRef} className="apple-dropdown-wrapper" style={{ minWidth: '300px' }}>
+                  <div
+                    onClick={() => setStockDropdownOpen(!stockDropdownOpen)}
+                    className="apple-select-trigger"
+                    style={{ minWidth: '300px' }}
+                  >
+                    <div className="select-content">
+                      {form.stock_id ? (() => {
+                        const s = dropdownStocks.find(st => st.id === Number(form.stock_id))
+                        return s ? (
+                          <div className="selected-stock">
+                            <span className="stock-code">{s.code}</span>
+                            <span className="stock-name">{s.name}</span>
+                          </div>
+                        ) : <span className="placeholder">请选择股票</span>
+                      })() : <span className="placeholder">搜索股票代码或名称...</span>}
+                    </div>
+                    <span className="dropdown-arrow">▼</span>
+                  </div>
+                  
+                  {stockDropdownOpen && (
+                    <div className="apple-dropdown">
+                      <div className="dropdown-search">
+                        <span className="search-icon">🔍</span>
+                        <input
+                          type="text"
+                          placeholder="搜索代码或名称"
+                          value={stockSearchText}
+                          onChange={(e) => { setStockSearchText(e.target.value); setDropdownPage(1) }}
+                          className="apple-input search-input"
+                          autoFocus
+                        />
+                        {dropdownLoading && <span style={{ marginLeft: '8px' }}>⏳</span>}
+                      </div>
+                      
+                      <div className="dropdown-list">
+                        {dropdownStocks.length === 0 && stockSearchText.trim() ? (
+                          <div className="apple-empty">
+                            <div className="empty-icon">🔍</div>
+                            <div>未找到匹配股票</div>
+                          </div>
+                        ) : dropdownStocks.length === 0 ? (
+                          <div className="apple-empty">
+                            <div className="empty-icon">💡</div>
+                            <div>输入关键词开始搜索</div>
+                          </div>
+                        ) : (
+                          dropdownStocks.map(s => (
+                            <div
+                              key={s.id}
+                              onClick={() => {
+                                setForm({...form, stock_id: s.id})
+                                setStockDropdownOpen(false)
+                                setStockSearchText('')
+                              }}
+                              className={`apple-dropdown-item ${form.stock_id === s.id ? 'active' : ''}`}
+                            >
+                              <div className="item-left">
+                                <span className="item-code">{s.code}</span>
+                                <span className="item-name">{s.name}</span>
+                              </div>
+                              <span className="item-tag">{s.market}</span>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                      
+                      {/* 分页控制 */}
+                      {dropdownTotal > 20 && (
+                        <div className="dropdown-pagination" style={{
+                          display: 'flex',
+                          justifyContent: 'center',
+                          alignItems: 'center',
+                          gap: '8px',
+                          padding: '8px 16px',
+                          borderTop: '1px solid rgba(0,0,0,0.06)'
+                        }}>
+                          <button 
+                            onClick={() => setDropdownPage(p => Math.max(1, p - 1))}
+                            disabled={dropdownPage === 1 || dropdownLoading}
+                            style={{ 
+                              padding: '4px 12px', 
+                              border: '1px solid rgba(0,0,0,0.1)',
+                              borderRadius: '6px',
+                              background: dropdownPage === 1 ? '#f5f5f5' : '#fff',
+                              cursor: dropdownPage === 1 ? 'not-allowed' : 'pointer'
+                            }}
+                          >
+                            ← 上一页
+                          </button>
+                          <span style={{ fontSize: '13px', color: '#666' }}>
+                            第 {dropdownPage} 页 / 共 {Math.ceil(dropdownTotal / 20)} 页
+                          </span>
+                          <button 
+                            onClick={() => setDropdownPage(p => p + 1)}
+                            disabled={dropdownPage >= Math.ceil(dropdownTotal / 20) || dropdownLoading}
+                            style={{ 
+                              padding: '4px 12px', 
+                              border: '1px solid rgba(0,0,0,0.1)',
+                              borderRadius: '6px',
+                              background: dropdownPage >= Math.ceil(dropdownTotal / 20) ? '#f5f5f5' : '#fff',
+                              cursor: dropdownPage >= Math.ceil(dropdownTotal / 20) ? 'not-allowed' : 'pointer'
+                            }}
+                          >
+                            下一页 →
+                          </button>
+                        </div>
+                      )}
+                      
+                      {dropdownStocks.length > 0 && (
+                        <div className="dropdown-stats">
+                          共 <strong>{dropdownTotal}</strong> 只股票，当前显示 {dropdownStocks.length} 只
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
               
               {/* 持仓数量 */}
@@ -273,16 +428,12 @@ const PortfolioPage = ({ stocks, toast }) => {
               
               {/* 买入日期 */}
               <div className="apple-form-group">
-                <label className="apple-label">
-                  <span className="label-icon">📅</span>
-                  买入日期
-                </label>
-                <input 
-                  type="date" 
-                  value={form.buy_date} 
-                  onChange={(e) => setForm({...form, buy_date: e.target.value})}
-                  className="apple-input date-input"
-                  required
+                <AppleDatePicker
+                  value={form.buy_date}
+                  onChange={(date) => setForm({...form, buy_date: date})}
+                  label="📅 买入日期"
+                  width="100%"
+                  placeholder="选择买入日期"
                 />
               </div>
               

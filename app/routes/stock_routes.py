@@ -190,15 +190,48 @@ def search_stock():
 @stock_bp.route('', methods=['GET'])
 @jwt_required()
 def get_stocks():
-    """获取所有股票列表"""
-    stocks = Stock.query.all()
-    return jsonify([{
-        'id': stock.id,
-        'code': stock.code,
-        'name': stock.name,
-        'market': stock.market,
-        'created_at': stock.created_at.isoformat()
-    } for stock in stocks])
+    """获取股票列表，支持分页和搜索"""
+    # 分页参数
+    page = request.args.get('page', 1, type=int)
+    page_size = request.args.get('page_size', 20, type=int)
+    search = request.args.get('search', '', type=str)
+    
+    # 限制最大页大小
+    page_size = min(page_size, 100)
+    
+    # 构建查询
+    query = Stock.query
+    
+    # 搜索过滤
+    if search:
+        search_pattern = f'%{search}%'
+        query = query.filter(
+            db.or_(
+                Stock.code.like(search_pattern),
+                Stock.name.like(search_pattern),
+                Stock.market.like(search_pattern)
+            )
+        )
+    
+    # 获取总数
+    total = query.count()
+    
+    # 分页查询
+    stocks = query.order_by(Stock.id.desc()).offset((page - 1) * page_size).limit(page_size).all()
+    
+    return jsonify({
+        'items': [{
+            'id': stock.id,
+            'code': stock.code,
+            'name': stock.name,
+            'market': stock.market,
+            'created_at': stock.created_at.isoformat()
+        } for stock in stocks],
+        'total': total,
+        'page': page,
+        'page_size': page_size,
+        'total_pages': (total + page_size - 1) // page_size
+    })
 
 
 @stock_bp.route('/<int:stock_id>', methods=['GET'])

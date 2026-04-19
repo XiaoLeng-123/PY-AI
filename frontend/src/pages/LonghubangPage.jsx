@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import axios from 'axios'
 import { toast } from '../components/Toast'
+import Pagination from '../components/Pagination'
+import AppleDatePicker from '../components/AppleDatePicker'
 
 const API_BASE = 'http://127.0.0.1:5000/api'
 
@@ -8,6 +10,9 @@ export default function LonghubangPage() {
   const [longhubangData, setLonghubangData] = useState(null)
   const [longhubangLoading, setLonghubangLoading] = useState(false)
   const [date, setDate] = useState(new Date().toISOString().split('T')[0])
+  // 分页
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(20)
   
   const loadData = async () => {
     setLonghubangLoading(true)
@@ -40,12 +45,12 @@ export default function LonghubangPage() {
       <div className="card" style={{marginBottom: '24px'}}>
         <div className="query-control-bar">
           <div className="control-item">
-            <label className="control-label">选择日期</label>
-            <input 
-              type="date" 
-              value={date} 
-              onChange={(e) => setDate(e.target.value)}
-              className="apple-input date-input"
+            <AppleDatePicker
+              value={date}
+              onChange={setDate}
+              placeholder="选择日期"
+              width="100%"
+              label="选择日期"
             />
           </div>
           <button 
@@ -101,9 +106,9 @@ export default function LonghubangPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {longhubangData.data.map((item, index) => (
+                    {longhubangData.data.slice((page - 1) * pageSize, page * pageSize).map((item, index) => (
                       <tr key={index}>
-                        <td><span className="rank-badge">{index + 1}</span></td>
+                        <td><span className="rank-badge">{(page - 1) * pageSize + index + 1}</span></td>
                         <td className="code-cell">{item.SECURITY_CODE}</td>
                         <td className="name-cell">{item.SECURITY_NAME_ABBR}</td>
                         <td>{item.INTERPRET}</td>
@@ -122,6 +127,13 @@ export default function LonghubangPage() {
                   </tbody>
                 </table>
               </div>
+              <Pagination
+                total={longhubangData.data.length}
+                page={page}
+                pageSize={pageSize}
+                onPageChange={setPage}
+                onPageSizeChange={(s) => { setPageSize(s); setPage(1) }}
+              />
             </>
           ) : (
             <div className="empty-state-large">

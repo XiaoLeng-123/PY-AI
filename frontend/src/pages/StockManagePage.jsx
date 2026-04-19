@@ -1,21 +1,23 @@
-import { useState, useMemo } from 'react'
-import axios from 'axios'
+import { useState, useEffect, useCallback } from 'react'
 import { toast } from '../components/Toast'
 import { exportStockList } from '../utils/export'
+import Pagination from '../components/Pagination'
+import { stockAPI } from '../utils/api'
 
-const API_BASE = 'http://127.0.0.1:5000/api'
-
-export default function StockManagePage({ stocks, loadStocks }) {
+export default function StockManagePage({ loadStocks: refreshParentStocks }) {
   const [stockForm, setStockForm] = useState({ code: '', name: '', market: '财神' })
-  const [stockSearchLoading, setStockSearchLoading] = useState(false)
   const [stockPreview, setStockPreview] = useState(null)
-  const [stockDetails, setStockDetails] = useState({})
   
   // 标签页状态
-  const [activeTab, setActiveTab] = useState('list') // 'list' 或 'add'
+  const [activeTab, setActiveTab] = useState('list')
   
-  // 搜索功能
+  // 后端分页状态
+  const [stocks, setStocks] = useState([])
+  const [total, setTotal] = useState(0)
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(20)
   const [searchText, setSearchText] = useState('')
+  const [loading, setLoading] = useState(false)
   
   // 添加股票搜索
   const [searchKeyword, setSearchKeyword] = useState('')
@@ -26,34 +28,88 @@ export default function StockManagePage({ stocks, loadStocks }) {
   const [queryError, setQueryError] = useState('')
   const [queryTimer, setQueryTimer] = useState(null)
   
-  // 筛选后的股票列表
-  const filteredStocks = useMemo(() => {
-    if (!searchText) return stocks
-    const lower = searchText.toLowerCase()
-    return stocks.filter(s => 
-      s.code.toLowerCase().includes(lower) || 
-      s.name.toLowerCase().includes(lower) ||
-      s.market.toLowerCase().includes(lower)
-    )
-  }, [stocks, searchText])
+  // 从后端加载股票列表（分页）
+  const loadStocksFromBackend = useCallback(async (currentPage = page, currentPageSize = pageSize, search = searchText) => {
+    setLoading(true)
+    try {
+      console.log('=== 开始加载股票列表 ===')
+      console.log('请求参数:', { page: currentPage, page_size: currentPageSize, search })
+      
+      const response = await stockAPI.getAll({
+        page: currentPage,
+        page_size: currentPageSize,
+        search: search
+      })
+      
+      console.log('API 完整响应:', response)
+      console.log('response.data:', response.data)
+      console.log('response.data 类型:', typeof response.data)
+      
+      // 检查返回的数据结构
+      if (Array.isArray(response.data)) {
+        // 如果返回的是数组（旧格式）
+        console.log('返回的是数组格式，长度:', response.data.length)
+        setStocks(response.data)
+        setTotal(response.data.length)
+      } else if (response.data && typeof response.data === 'object') {
+        // 新格式：{items, total, page, ...}
+        console.log('返回的是对象格式')
+        console.log('items:', response.data.items)
+        console.log('total:', response.data.total)
+        setStocks(response.data.items || [])
+        setTotal(response.data.total || 0)
+      } else {
+        console.error('未知的数据格式:', response.data)
+        setStocks([])
+        setTotal(0)
+      }
+    } catch (error) {
+      console.error('加载股票列表失败:', error)
+      console.error('错误详情:', error.response?.data)
+      console.error('错误状态码:', error.response?.status)
+      toast.error('加载股票列表失败: ' + (error.response?.data?.error || error.message))
+      setStocks([])
+      setTotal(0)
+    } finally {
+      setLoading(false)
+      console.log('=== 加载完成 ===')
+    }
+  }, [page, pageSize, searchText])
+  
+  // 初始加载和分页/搜索变化时重新加载
+  useEffect(() => {
+    loadStocksFromBackend(page, pageSize, searchText)
+  }, [page, pageSize, searchText, loadStocksFromBackend])
+  
+  // 搜索/分页大小变更时重置到第1页
+  const handleSearchChange = (value) => {
+    setSearchText(value)
+    setPage(1)
+  }
+  
+  const handlePageSizeChange = (newSize) => {
+    setPageSize(newSize)
+    setPage(1)
+  }
   
   const handleAddStock = async (e) => {
     e.preventDefault()
     
-    // 如果没有预览信息，先查询
     if (!previewStock && stockForm.code) {
       await handleQueryStock(stockForm.code)
       return
     }
     
     try {
-      await axios.post(`${API_BASE}/stocks`, stockForm)
+      await stockAPI.add(stockForm)
       toast.success('股票添加成功')
       setStockForm({ code: '', name: '', market: '财神' })
       setPreviewStock(null)
       setQueryError('')
-      loadStocks(true)
-      // 添加成功后自动切换到列表页
+      setSearchKeyword('')
+      // 刷新列表
+      loadStocksFromBackend()
+      refreshParentStocks && refreshParentStocks(true)
       setActiveTab('list')
     } catch (error) {
       toast.error(error.response?.data?.error || '添加失败')
@@ -62,19 +118,16 @@ export default function StockManagePage({ stocks, loadStocks }) {
   
   // 查询股票信息（防抖处理）
   const handleQueryStock = async (keyword) => {
-    // 清除之前的定时器
     if (queryTimer) {
       clearTimeout(queryTimer)
     }
     
-    // 如果关键词为空，清空预览
     if (!keyword || keyword.length < 2) {
       setPreviewStock(null)
       setQueryError('')
       return
     }
     
-    // 设置防抖，等待用户输入完成后才查询
     const timer = setTimeout(async () => {
       setQueryLoading(true)
       setQueryError('')
@@ -82,29 +135,24 @@ export default function StockManagePage({ stocks, loadStocks }) {
       
       try {
         const params = {}
-        // 如果全是数字，认为是代码
         if (/^\d+$/.test(keyword)) {
           params.code = keyword.trim()
         } else {
           params.name = keyword.trim()
         }
         
-        const response = await axios.get(`${API_BASE}/stocks/search`, {
-          params
-        })
+        const response = await stockAPI.search(params)
         
         if (response.data.exists) {
           setQueryError(`⚠️ 该股票已存在于数据库中：${response.data.stock.name}`)
           setPreviewStock(null)
         } else if (response.data.stock) {
           setPreviewStock(response.data.stock)
-          // 自动填充表单
           setStockForm({
             code: response.data.stock.code,
             name: response.data.stock.name,
             market: response.data.stock.market
           })
-          // 如果API不可用，显示警告而不是错误
           if (response.data.api_unavailable) {
             setQueryError('⚠️ 无法获取实时行情，请手动确认信息后添加')
           } else {
@@ -124,7 +172,7 @@ export default function StockManagePage({ stocks, loadStocks }) {
       } finally {
         setQueryLoading(false)
       }
-    }, 500) // 500ms 防抖
+    }, 500)
     
     setQueryTimer(timer)
   }
@@ -132,22 +180,31 @@ export default function StockManagePage({ stocks, loadStocks }) {
   const handleDeleteStock = async (id) => {
     if (!window.confirm('确定删除?')) return
     try {
-      await axios.delete(`${API_BASE}/stocks/${id}`)
+      await stockAPI.delete(id)
       toast.success('删除成功')
-      loadStocks(true)
+      loadStocksFromBackend()
+      refreshParentStocks && refreshParentStocks(true)
     } catch (error) {
       toast.error('删除失败')
     }
   }
   
-  const handleExportStocks = () => {
-    if (stocks.length === 0) {
+  const handleExportStocks = async () => {
+    if (total === 0) {
       toast.warning('没有可导出的股票数据')
       return
     }
-    const result = exportStockList(stocks)
-    if (result.success) {
-      toast.success(`成功导出 ${result.rows} 条数据`)
+    
+    // 导出时获取所有数据
+    try {
+      const response = await stockAPI.getAll({ page: 1, page_size: 10000 })
+      const allStocks = response.data.items
+      const result = exportStockList(allStocks)
+      if (result.success) {
+        toast.success(`成功导出 ${result.rows} 条数据`)
+      }
+    } catch (error) {
+      toast.error('导出失败')
     }
   }
   
@@ -163,7 +220,7 @@ export default function StockManagePage({ stocks, loadStocks }) {
           </div>
         </div>
         <div className="header-right">
-          <div className="live-time">共 {stocks.length} 只股票</div>
+          <div className="live-time">共 {total} 只股票</div>
         </div>
       </div>
       
@@ -177,7 +234,7 @@ export default function StockManagePage({ stocks, loadStocks }) {
           <div className="stat-icon-pill">📊</div>
           <div className="stat-content">
             <div className="stat-label">股票总数</div>
-            <div className="stat-value">{stocks.length}</div>
+            <div className="stat-value">{total}</div>
             <div className="stat-subtitle">已收录股票</div>
           </div>
         </div>
@@ -189,9 +246,9 @@ export default function StockManagePage({ stocks, loadStocks }) {
         }}>
           <div className="stat-icon-pill">🔍</div>
           <div className="stat-content">
-            <div className="stat-label">搜索结果</div>
-            <div className="stat-value">{filteredStocks.length}</div>
-            <div className="stat-subtitle">当前显示</div>
+            <div className="stat-label">当前页</div>
+            <div className="stat-value">{stocks.length}</div>
+            <div className="stat-subtitle">显示数量</div>
           </div>
         </div>
         
@@ -202,9 +259,9 @@ export default function StockManagePage({ stocks, loadStocks }) {
         }}>
           <div className="stat-icon-pill">✅</div>
           <div className="stat-content">
-            <div className="stat-label">筛选状态</div>
-            <div className="stat-value" style={{ fontSize: '24px' }}>{searchText ? '已筛选' : '全部'}</div>
-            <div className="stat-subtitle">{searchText ? `关键词: ${searchText}` : '无筛选条件'}</div>
+            <div className="stat-label">搜索状态</div>
+            <div className="stat-value" style={{ fontSize: '24px' }}>{searchText ? '已搜索' : '全部'}</div>
+            <div className="stat-subtitle">{searchText ? `关键词: ${searchText}` : '无搜索条件'}</div>
           </div>
         </div>
         
@@ -221,13 +278,14 @@ export default function StockManagePage({ stocks, loadStocks }) {
           </div>
         </div>
       </div>
-      {/* 标签页切换 - 苹果风格 */}
+      
+      {/* 标签页切换 */}
       <div className="apple-segmented-control">
         <button
           onClick={() => setActiveTab('list')}
           className={`segmented-btn ${activeTab === 'list' ? 'active' : ''}`}
         >
-          📋 股票列表 ({stocks.length})
+          📋 股票列表 ({total})
         </button>
         <button
           onClick={() => setActiveTab('add')}
@@ -246,14 +304,14 @@ export default function StockManagePage({ stocks, loadStocks }) {
           <div className="card-header">
             <h3 className="card-title">📋 股票列表</h3>
             <div className="card-actions">
-              {/* 搜索框 - 苹果风格 */}
+              {/* 搜索框 */}
               <div className="search-input-wrapper">
                 <span className="search-icon">🔍</span>
                 <input
                   type="text"
                   placeholder="搜索代码、名称、市场..."
                   value={searchText}
-                  onChange={(e) => setSearchText(e.target.value)}
+                  onChange={(e) => handleSearchChange(e.target.value)}
                   className="search-input"
                 />
               </div>
@@ -263,16 +321,24 @@ export default function StockManagePage({ stocks, loadStocks }) {
             </div>
           </div>
           
-          {/* 统计信息条 - 苹果风格 */}
-          <div className="info-banner">
-            <div className="info-item">
-              <span className="info-icon">📊</span>
-              <span>共 <strong>{stocks.length}</strong> 只股票</span>
-            </div>
-            <div className="info-item">
-              <span className="info-icon">🔍</span>
-              <span>显示 <strong>{filteredStocks.length}</strong> 只</span>
-            </div>
+          {/* 统计信息条 */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '16px',
+            padding: '8px 12px',
+            marginBottom: '12px',
+            background: 'rgba(102, 126, 234, 0.06)',
+            borderRadius: '8px',
+            fontSize: '13px',
+            color: '#666'
+          }}>
+            <span>📊 共 <strong style={{ color: '#667eea' }}>{total}</strong> 只</span>
+            <span style={{ color: '#ddd' }}>|</span>
+            <span>📄 第 <strong style={{ color: '#667eea' }}>{page}</strong> 页</span>
+            <span style={{ color: '#ddd' }}>|</span>
+            <span>🔍 每页 <strong style={{ color: '#667eea' }}>{pageSize}</strong> 条</span>
+            {loading && <span style={{ marginLeft: 'auto' }}>⏳ 加载中...</span>}
           </div>
           
           <div className="table-container">
@@ -287,14 +353,14 @@ export default function StockManagePage({ stocks, loadStocks }) {
                 </tr>
               </thead>
               <tbody>
-                {filteredStocks.length === 0 ? (
+                {stocks.length === 0 ? (
                   <tr>
                     <td colSpan="5" className="empty-state">
                       {searchText ? '🔍 未找到匹配的股票' : '📭 暂无股票数据，请切换到“添加股票”标签页'}
                     </td>
                   </tr>
                 ) : (
-                  filteredStocks.map(stock => (
+                  stocks.map(stock => (
                     <tr key={stock.id}>
                       <td>{stock.id}</td>
                       <td className="code-cell">{stock.code}</td>
@@ -311,6 +377,13 @@ export default function StockManagePage({ stocks, loadStocks }) {
               </tbody>
             </table>
           </div>
+          <Pagination
+            total={total}
+            page={page}
+            pageSize={pageSize}
+            onPageChange={setPage}
+            onPageSizeChange={handlePageSizeChange}
+          />
         </div>
       )}
 
@@ -325,7 +398,6 @@ export default function StockManagePage({ stocks, loadStocks }) {
           </div>
           
           <form onSubmit={handleAddStock}>
-            {/* 搜索框 - 苹果风格 */}
             <div className="form-group">
               <div className="search-input-wrapper large">
                 <span className="search-icon">🔍</span>
@@ -346,7 +418,6 @@ export default function StockManagePage({ stocks, loadStocks }) {
               </div>
             </div>
             
-            {/* 加载状态 - 苹果风格 */}
             {queryLoading && (
               <div className="loading-state">
                 <div className="spinner">⏳</div>
@@ -367,7 +438,6 @@ export default function StockManagePage({ stocks, loadStocks }) {
                   <span>查询成功！请确认以下信息：</span>
                 </div>
                 
-                {/* 基本信息 */}
                 <div className="preview-grid">
                   <div className="preview-item">
                     <div className="item-label">股票代码</div>
@@ -383,7 +453,6 @@ export default function StockManagePage({ stocks, loadStocks }) {
                   </div>
                 </div>
                 
-                {/* 实时行情 */}
                 {(previewStock.price || previewStock.price === 0) && (
                   <div className="preview-grid">
                     <div className="preview-item">
@@ -410,7 +479,7 @@ export default function StockManagePage({ stocks, loadStocks }) {
                 )}
                             
                 <div className="preview-footer">
-                  确认无误后，点击下方“添加股票”按钮
+                  确认无误后，点击下方"添加股票"按钮
                 </div>
               </div>
             )}
@@ -419,7 +488,7 @@ export default function StockManagePage({ stocks, loadStocks }) {
               <button 
                 type="submit" 
                 className="btn-primary pill-btn large"
-                disabled={stockSearchLoading || queryLoading || !previewStock}
+                disabled={queryLoading || !previewStock}
               >
                 {!previewStock ? (
                   <><span>🔍</span> 先查询股票信息</>
@@ -433,6 +502,7 @@ export default function StockManagePage({ stocks, loadStocks }) {
                   setStockForm({ code: '', name: '', market: '财神' })
                   setPreviewStock(null)
                   setQueryError('')
+                  setSearchKeyword('')
                 }}
                 className="btn-secondary pill-btn large danger"
               >
@@ -441,7 +511,6 @@ export default function StockManagePage({ stocks, loadStocks }) {
             </div>
           </form>
           
-          {/* 提示框 - 苹果风格 */}
           <div className="tip-banner">
             💡 <strong>提示：</strong>
             <ul>

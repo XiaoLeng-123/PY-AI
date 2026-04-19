@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react'
-import axios from 'axios'
 import './App.css'
 import AppLayout from './layouts/AppLayout'
 import { ToastProvider, toast } from './components/Toast'
@@ -25,8 +24,8 @@ import LoginPage from './pages/LoginPage'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { setCache, getCache } from './utils/cache'
 import { getCurrentTheme, applyTheme } from './utils/themes'
+import { stockAPI } from './utils/api'
 
-const API_BASE = 'http://127.0.0.1:5000/api'
 const CACHE_ENABLED = true
 
 export default function App() {
@@ -79,7 +78,7 @@ function MainApp() {
   const [stocks, setStocks] = useState([])
   const [selectedStock, setSelectedStock] = useState('')
   
-  // 加载股票列表
+  // 加载股票列表（用于下拉框等需要全部数据的场景）
   const loadStocks = async (forceRefresh = false) => {
     try {
       if (!forceRefresh && CACHE_ENABLED) {
@@ -90,11 +89,13 @@ function MainApp() {
         }
       }
       
-      const response = await axios.get(`${API_BASE}/stocks`)
-      setStocks(response.data)
+      // 获取前100条用于下拉框等场景
+      const response = await stockAPI.getAll({ page: 1, page_size: 100 })
+      const stockList = response.data.items || []
+      setStocks(stockList)
       
       if (CACHE_ENABLED) {
-        setCache('stocks', response.data, 5 * 60) // 缓存5分钟
+        setCache('stocks', stockList, 5 * 60)
       }
     } catch (error) {
       console.error('加载股票列表失败:', error)
@@ -106,61 +107,38 @@ function MainApp() {
     loadStocks()
   }, [])
   
-  // 根据当前菜单渲染对应页面
-  const renderPage = () => {
-    const pageProps = {
-      stocks,
-      selectedStock,
-      setSelectedStock,
-      loadStocks,
-      toast
-    }
-    
-    switch (currentMenu) {
-      case 'dashboard':
-        return <DashboardPage {...pageProps} />
-      case 'stockManage':
-        return <StockManagePage {...pageProps} />
-      case 'fetchAllStocks':
-        return <FetchAllStocksPage {...pageProps} />
-      case 'dataEntry':
-        return <DataEntryPage {...pageProps} />
-      case 'dataView':
-        return <DataViewPage {...pageProps} />
-      case 'statistics':
-        return <StatisticsPage {...pageProps} />
-      case 'watchlist':
-        return <WatchlistPage {...pageProps} />
-      case 'alerts':
-        return <AlertPage {...pageProps} />
-      case 'sectorAnalysis':
-        return <SectorAnalysisPage {...pageProps} />
-      case 'moneyflow':
-        return <MoneyFlowPage {...pageProps} />
-      case 'signals':
-        return <TradingSignalsPage {...pageProps} />
-      case 'backtest':
-        return <BacktestPage {...pageProps} />
-      case 'portfolio':
-        return <PortfolioPage {...pageProps} />
-      case 'compare':
-        return <ComparePage {...pageProps} />
-      case 'screener':
-        return <ScreenerPage {...pageProps} />
-      case 'financialForecast':
-        return <FinancialForecastPage {...pageProps} />
-      case 'longhubang':
-        return <LonghubangPage {...pageProps} />
-      case 'auction':
-        return <AuctionPage {...pageProps} />
-      case 'aiAnalysis':
-        return <AiAnalysisPage {...pageProps} />
-      case 'settings':
-        return <SettingsPage {...pageProps} />
-      default:
-        return <DashboardPage {...pageProps} />
-    }
+  // 根据当前菜单渲染对应页面 - 所有页面常驻挂载，通过 display 控制显示
+  // 这样切换页面时不会重新挂载组件，数据保持不变，切换秒级响应
+  const pageProps = {
+    stocks,
+    selectedStock,
+    setSelectedStock,
+    loadStocks,
+    toast
   }
+  
+  const pages = [
+    { key: 'dashboard', component: <DashboardPage key="dashboard" {...pageProps} /> },
+    { key: 'stockManage', component: <StockManagePage key="stockManage" {...pageProps} /> },
+    { key: 'fetchAllStocks', component: <FetchAllStocksPage key="fetchAllStocks" {...pageProps} /> },
+    { key: 'dataEntry', component: <DataEntryPage key="dataEntry" {...pageProps} /> },
+    { key: 'dataView', component: <DataViewPage key="dataView" {...pageProps} /> },
+    { key: 'statistics', component: <StatisticsPage key="statistics" {...pageProps} /> },
+    { key: 'watchlist', component: <WatchlistPage key="watchlist" {...pageProps} /> },
+    { key: 'alerts', component: <AlertPage key="alerts" {...pageProps} /> },
+    { key: 'sectorAnalysis', component: <SectorAnalysisPage key="sectorAnalysis" {...pageProps} /> },
+    { key: 'moneyflow', component: <MoneyFlowPage key="moneyflow" {...pageProps} /> },
+    { key: 'signals', component: <TradingSignalsPage key="signals" {...pageProps} /> },
+    { key: 'backtest', component: <BacktestPage key="backtest" {...pageProps} /> },
+    { key: 'portfolio', component: <PortfolioPage key="portfolio" {...pageProps} /> },
+    { key: 'compare', component: <ComparePage key="compare" {...pageProps} /> },
+    { key: 'screener', component: <ScreenerPage key="screener" {...pageProps} /> },
+    { key: 'financialForecast', component: <FinancialForecastPage key="financialForecast" {...pageProps} /> },
+    { key: 'longhubang', component: <LonghubangPage key="longhubang" {...pageProps} /> },
+    { key: 'auction', component: <AuctionPage key="auction" {...pageProps} /> },
+    { key: 'aiAnalysis', component: <AiAnalysisPage key="aiAnalysis" {...pageProps} /> },
+    { key: 'settings', component: <SettingsPage key="settings" {...pageProps} /> },
+  ]
   
   return (
     <ToastProvider>
@@ -170,7 +148,18 @@ function MainApp() {
         collapsed={collapsed}
         setCollapsed={setCollapsed}
       >
-        {renderPage()}
+        {/* 所有页面常驻挂载，只显示当前页面，切换无延迟 */}
+        {pages.map(page => (
+          <div
+            key={page.key}
+            style={{
+              display: currentMenu === page.key ? 'block' : 'none',
+              height: '100%',
+            }}
+          >
+            {page.component}
+          </div>
+        ))}
       </AppLayout>
     </ToastProvider>
   )
