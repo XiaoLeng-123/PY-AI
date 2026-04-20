@@ -47,12 +47,12 @@ echo ""
 
 # 检查日志文件
 echo "[3/5] 检查日志文件..."
-if [ -f "$DEPLOY_PATH/logs/error.log" ]; then
-    ERROR_LINES=$(tail -100 "$DEPLOY_PATH/logs/error.log" | grep -c "ERROR\|Exception\|Traceback" || true)
+if [ -f "$DEPLOY_PATH/deploy/logs/error.log" ]; then
+    ERROR_LINES=$(tail -100 "$DEPLOY_PATH/deploy/logs/error.log" | grep -c "ERROR\|Exception\|Traceback" || true)
     if [ "$ERROR_LINES" -gt 0 ]; then
         echo -e "  ${YELLOW}⚠${NC} 发现 $ERROR_LINES 条错误日志"
         echo "  最近错误:"
-        tail -5 "$DEPLOY_PATH/logs/error.log" | grep "ERROR\|Exception" | head -3 | sed 's/^/    /'
+        tail -5 "$DEPLOY_PATH/deploy/logs/error.log" | grep "ERROR\|Exception" | head -3 | sed 's/^/    /'
     else
         echo -e "  ${GREEN}✓${NC} 日志正常，无严重错误"
     fi
@@ -72,7 +72,7 @@ elif [ "$HTTP_CODE" = "000" ]; then
     echo -e "  ${RED}✗${NC} API 无法连接"
     echo "  请检查:"
     echo "    1. 后端服务是否启动: sudo systemctl status xiaoma-analysis"
-    echo "    2. Gunicorn 配置是否正确: cat $DEPLOY_PATH/config/gunicorn.conf.py"
+    echo "    2. Gunicorn 配置是否正确: cat $DEPLOY_PATH/deploy/config/gunicorn.conf.py"
 else
     echo -e "  ${YELLOW}⚠${NC} API 响应异常 (HTTP $HTTP_CODE)"
 fi

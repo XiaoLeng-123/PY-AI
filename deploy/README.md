@@ -4,14 +4,47 @@
 > **域名**: caodax.cn  
 > **最后更新**: 2024-04-20
 
-## 📖 文档导航
+##  部署方式
 
-- 🚀 [快速开始](#-快速开始)
-- 📦 [文件结构](#-文件结构)
-- 🔧 [配置说明](#-配置说明)
-- 🛠️ [服务管理](#️-服务管理)
-- ❓ [故障排查](#-故障排查)
-- 📚 [详细文档](#-详细文档)
+本项目提供两种部署方式：
+
+### 🚀 方式一：Git 一键部署（推荐）
+
+从 Git 仓库直接拉取代码并自动完成所有配置：
+
+```bash
+# 1. 在服务器上运行
+cd /opt
+git clone https://github.com/your-username/PY-AI.git
+cd PY-AI/deploy
+
+# 2. 一键部署（自动完成所有配置）
+sudo bash git_deploy.sh
+```
+
+**特点**：
+- ✅ 完全自动化，无需手动配置
+- ✅ 自动安装依赖
+- ✅ 自动配置数据库
+- ✅ 自动配置 Nginx 和 Systemd
+- ✅ 支持代码更新（git pull）
+
+### 📦 方式二：传统部署包部署
+
+适合没有 Git 仓库或需要离线部署的场景：
+
+```bash
+# 1. 在本地构建部署包
+cd C:\PY-AI
+bash build_deploy.sh
+
+# 2. 上传到服务器
+rsync -avz deploy/ root@server:/opt/xiaoma-analysis/
+
+# 3. 在服务器上部署
+cd /opt/xiaoma-analysis
+sudo bash scripts/deploy.sh
+```
 
 ---
 

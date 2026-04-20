@@ -43,7 +43,7 @@ echo ""
 # 检查项 2: 关键文件
 echo -e "${BLUE}[检查 2/8]${NC} 关键文件..."
 MISSING_FILES=()
-for file in backend/wsgi.py backend/requirements.txt config/nginx.conf config/gunicorn.conf.py; do
+for file in deploy/backend/wsgi.py backend/requirements.txt deploy/config/nginx.conf deploy/config/gunicorn.conf.py; do
     if [ ! -f "$DEPLOY_PATH/$file" ]; then
         MISSING_FILES+=("$file")
     fi
@@ -116,12 +116,12 @@ echo ""
 
 # 检查项 5: 环境变量配置
 echo -e "${BLUE}[检查 5/8]${NC} 环境变量配置..."
-if [ -f "$DEPLOY_PATH/backend/.env" ]; then
+if [ -f "$DEPLOY_PATH/.env" ]; then
     echo -e "  ${GREEN}✓${NC} .env 文件存在"
     
     # 检查关键配置
-    if grep -q "DATABASE_URL" "$DEPLOY_PATH/backend/.env"; then
-        DB_URL=$(grep "DATABASE_URL" "$DEPLOY_PATH/backend/.env" | cut -d'=' -f2-)
+    if grep -q "DATABASE_URL" "$DEPLOY_PATH/.env"; then
+        DB_URL=$(grep "DATABASE_URL" "$DEPLOY_PATH/.env" | cut -d'=' -f2-)
         if [ -n "$DB_URL" ]; then
             echo -e "  ${GREEN}✓${NC} 数据库连接已配置"
         else
@@ -135,8 +135,8 @@ if [ -f "$DEPLOY_PATH/backend/.env" ]; then
 else
     echo -e "  ${RED}✗${NC} .env 文件不存在"
     echo -e "  ${YELLOW}→${NC} 修复: 复制配置模板"
-    if [ -f "$DEPLOY_PATH/config/deploy.env" ]; then
-        cp "$DEPLOY_PATH/config/deploy.env" "$DEPLOY_PATH/backend/.env"
+    if [ -f "$DEPLOY_PATH/deploy/config/deploy.env" ]; then
+        cp "$DEPLOY_PATH/deploy/config/deploy.env" "$DEPLOY_PATH/.env"
         echo -e "  ${GREEN}✓${NC} 已复制配置模板，请编辑 .env 文件"
     fi
     ISSUES=$((ISSUES + 1))
@@ -168,7 +168,7 @@ if systemctl list-unit-files | grep -q "xiaoma-analysis"; then
 else
     echo -e "  ${RED}✗${NC} 系统服务未注册"
     echo -e "  ${YELLOW}→${NC} 修复: 重新运行部署脚本"
-    echo "  命令: sudo bash scripts/deploy.sh"
+    echo "  命令: sudo bash git_deploy.sh"
     ISSUES=$((ISSUES + 1))
 fi
 echo ""
@@ -201,8 +201,8 @@ if command -v nginx &> /dev/null; then
     else
         echo -e "  ${RED}✗${NC} Nginx 配置文件不存在"
         echo -e "  ${YELLOW}→${NC} 修复: 复制配置文件"
-        if [ -f "$DEPLOY_PATH/config/nginx.conf" ]; then
-            cp "$DEPLOY_PATH/config/nginx.conf" /etc/nginx/sites-available/xiaoma-analysis
+        if [ -f "$DEPLOY_PATH/deploy/config/nginx.conf" ]; then
+            cp "$DEPLOY_PATH/deploy/config/nginx.conf" /etc/nginx/sites-available/xiaoma-analysis
             ln -sf /etc/nginx/sites-available/xiaoma-analysis /etc/nginx/sites-enabled/
             nginx -t && systemctl restart nginx
             echo -e "  ${GREEN}✓${NC} Nginx 配置完成"
