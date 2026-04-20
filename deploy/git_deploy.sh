@@ -15,7 +15,7 @@ BLUE='\033[0;34m'
 NC='\033[0m'
 
 # 配置变量
-GIT_REPO="${GIT_REPO:-https://github.com/your-username/PY-AI.git}"
+GIT_REPO="${GIT_REPO:-https://github.com/XiaoLeng-123/PY-AI.git}"
 GIT_BRANCH="${GIT_BRANCH:-main}"
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
@@ -213,7 +213,7 @@ setup_database() {
         log_warning "无法使用 root 用户连接 MySQL"
         log_info "请手动执行以下 SQL:"
         echo "CREATE DATABASE IF NOT EXISTS xiaoma_analysis CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
-        echo "CREATE USER IF NOT EXISTS 'xiaoma'@'localhost' IDENTIFIED BY 'your-password';"
+        echo "CREATE USER IF NOT EXISTS 'xiaoma'@'localhost' IDENTIFIED BY 'xiaoma_password_2024';"
         echo "GRANT ALL PRIVILEGES ON xiaoma_analysis.* TO 'xiaoma'@'localhost';"
         echo "FLUSH PRIVILEGES;"
         return
