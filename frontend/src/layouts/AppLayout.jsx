@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 
 // 构建菜单key到标签的映射
@@ -88,12 +88,33 @@ export default function AppLayout({ currentMenu, setCurrentMenu, collapsed, setC
   const [showUserMenu, setShowUserMenu] = useState(false)
   // 面包屑历史记录：记录用户访问过的页面路径
   const [breadcrumbHistory, setBreadcrumbHistory] = useState([{ key: 'dashboard', label: '首页' }])
-  // 记录各分组的展开/折叠状态，默认全部展开
+  // 记录各分组的展开/折叠状态，默认全部展开，并使用localStorage持久化
   const [expandedGroups, setExpandedGroups] = useState(() => {
+    try {
+      // 尝试从localStorage加载之前保存的状态
+      const saved = localStorage.getItem('menu_expanded_groups')
+      if (saved) {
+        return JSON.parse(saved)
+      }
+    } catch (e) {
+      console.error('加载菜单状态失败:', e)
+    }
+    // 如果没有保存的状态，则初始化所有分组为展开
     const init = {}
-    allMenuGroups.forEach(g => { init[g.group] = true })
+    allMenuGroups.forEach(g => { 
+      init[g.group] = true 
+    })
     return init
   })
+  
+  // 当expandedGroups变化时，保存到localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem('menu_expanded_groups', JSON.stringify(expandedGroups))
+    } catch (e) {
+      console.error('保存菜单状态失败:', e)
+    }
+  }, [expandedGroups])
 
   // 当 currentMenu 变化时，追加到面包屑历史（如果不在最后一位）
   useEffect(() => {
@@ -115,13 +136,16 @@ export default function AppLayout({ currentMenu, setCurrentMenu, collapsed, setC
   }, [currentMenu])
 
   // 根据角色过滤菜单组：admin=全部, user=非admin菜单
-  const menuGroups = allMenuGroups.map(group => ({
-    ...group,
-    items: group.items.filter(item => {
-      if (item.access === 'admin') return user?.role === 'admin'
-      return true
-    })
-  })).filter(group => group.items.length > 0)  // 隐藏空分组
+  // 使用 useMemo 避免每次渲染都重新计算
+  const menuGroups = useMemo(() => {
+    return allMenuGroups.map(group => ({
+      ...group,
+      items: group.items.filter(item => {
+        if (item.access === 'admin') return user?.role === 'admin'
+        return true
+      })
+    })).filter(group => group.items.length > 0)  // 隐藏空分组
+  }, [user?.role])
 
   // 切换分组展开/折叠 - 手风琴模式：同时只能展开一个
   const toggleGroup = (groupKey) => {
@@ -140,14 +164,15 @@ export default function AppLayout({ currentMenu, setCurrentMenu, collapsed, setC
     })
   }
 
-  // 点击子菜单时，展开其所在分组并折叠其他分组（手风琴模式）
+  // 点击子菜单时，只展开其所在分组，不强制折叠其他分组
   const handleMenuClick = (key) => {
     const groupKey = groupKeyMap[key]
+    
     if (groupKey) {
-      const newState = {}
-      allMenuGroups.forEach(g => { newState[g.group] = false })
-      newState[groupKey] = true
-      setExpandedGroups(newState)
+      setExpandedGroups(prev => ({
+        ...prev,
+        [groupKey]: true  // 只确保当前分组展开，不影响其他分组
+      }))
     }
     setCurrentMenu(key)
   }
@@ -174,8 +199,10 @@ export default function AppLayout({ currentMenu, setCurrentMenu, collapsed, setC
         
         <nav className="menu">
           {menuGroups.map(group => {
-            const isExpanded = expandedGroups[group.group] !== false  // 默认展开
+            // 确保每个分组都有明确的展开状态，默认为true
+            const isExpanded = expandedGroups[group.group] === undefined ? true : expandedGroups[group.group]
             const hasActiveChild = group.items.some(item => item.key === currentMenu)
+            
             return (
               <div key={group.group} className={`menu-group ${hasActiveChild ? 'has-active-child' : ''}`}>
                 {/* 分组标题 - 可点击展开/折叠 */}
@@ -202,7 +229,13 @@ export default function AppLayout({ currentMenu, setCurrentMenu, collapsed, setC
                   <div className="menu-group-divider" />
                 )}
                 {/* 子菜单列表 - 带展开/折叠动画 */}
-                <div className={`menu-group-items ${isExpanded ? 'expanded' : 'collapsed'}`}>
+                <div 
+                  className={`menu-group-items ${isExpanded ? 'expanded' : 'collapsed'}`}
+                  style={{
+                    // 强制使用内联样式确保正确显示
+                    gridTemplateRows: isExpanded ? '1fr' : '0fr'
+                  }}
+                >
                   <div className="menu-group-items-inner">
                     {group.items.map(item => (
                       <div

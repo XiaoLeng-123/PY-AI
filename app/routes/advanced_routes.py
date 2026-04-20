@@ -1214,7 +1214,17 @@ def get_financial_forecast(stock_id):
             # 获取最新一期财报
             latest_report = financial_data[0]
         
-        # 解析关键财务指标
+        # 解析关键财务指标 - 使用None表示无数据，0表示实际值为0
+        def safe_get(data, key, default=None):
+            """安全获取字段，空值返回None"""
+            val = data.get(key)
+            if val is None or val == '':
+                return default
+            try:
+                return float(val)
+            except (ValueError, TypeError):
+                return default
+        
         result = {
             'stock_id': stock.id,
             'stock_code': stock.code,
@@ -1222,55 +1232,68 @@ def get_financial_forecast(stock_id):
             'report_date': latest_report.get('REPORT_DATE', ''),
             
             # 盈利能力
-            'roe': latest_report.get('ROE', 0),
-            'roa': latest_report.get('ROA', 0),
-            'gross_profit_margin': latest_report.get('GROSS_PROFIT_MARGIN', 0),
-            'net_profit_margin': latest_report.get('NET_PROFIT_MARGIN', 0),
+            'roe': safe_get(latest_report, 'ROE'),
+            'roa': safe_get(latest_report, 'ROA'),
+            'gross_profit_margin': safe_get(latest_report, 'GROSS_PROFIT_MARGIN'),
+            'net_profit_margin': safe_get(latest_report, 'NET_PROFIT_MARGIN'),
             
             # 成长能力
-            'revenue': latest_report.get('TOTAL_REVENUE_TTM', 0),
-            'net_profit': latest_report.get('PARENT_NETPROFIT_TTM', 0),
-            'revenue_yoy': latest_report.get('TOTAL_REVENUE_YOY', 0),
-            'profit_yoy': latest_report.get('PARENT_NETPROFIT_YOY', 0),
+            'revenue': safe_get(latest_report, 'TOTAL_REVENUE_TTM'),
+            'net_profit': safe_get(latest_report, 'PARENT_NETPROFIT_TTM'),
+            'revenue_yoy': safe_get(latest_report, 'TOTAL_REVENUE_YOY'),
+            'profit_yoy': safe_get(latest_report, 'PARENT_NETPROFIT_YOY'),
             
             # 偿债能力
-            'debt_ratio': latest_report.get('ASSET_LIABILITY_RATIO', 0),
-            'current_ratio': latest_report.get('CURRENT_RATIO', 0),
-            'quick_ratio': latest_report.get('QUICK_RATIO', 0),
+            'debt_ratio': safe_get(latest_report, 'ASSET_LIABILITY_RATIO'),
+            'current_ratio': safe_get(latest_report, 'CURRENT_RATIO'),
+            'quick_ratio': safe_get(latest_report, 'QUICK_RATIO'),
             
             # 营运能力
-            'inventory_turnover': latest_report.get('INVENTORY_TURNOVER', 0),
-            'receivables_turnover': latest_report.get('AR_TURNOVER', 0),
-            'total_asset_turnover': latest_report.get('TOTAL_ASSET_TURNOVER', 0),
+            'inventory_turnover': safe_get(latest_report, 'INVENTORY_TURNOVER'),
+            'receivables_turnover': safe_get(latest_report, 'AR_TURNOVER'),
+            'total_asset_turnover': safe_get(latest_report, 'TOTAL_ASSET_TURNOVER'),
             
             # 每股指标
-            'eps': latest_report.get('EPS', 0),
-            'bps': latest_report.get('BPS', 0),
+            'eps': safe_get(latest_report, 'EPS'),
+            'bps': safe_get(latest_report, 'BPS'),
             
             # 现金流
-            'operating_cash_flow': latest_report.get('OPERATE_CASH_FLOW', 0),
+            'operating_cash_flow': safe_get(latest_report, 'OPERATE_CASH_FLOW'),
         }
         
-        # 财务健康评分
+        # 财务健康评分 - 只对有数据的字段评分
         score = 0
+        max_score = 0
         
-        if result['roe'] > 15: score += 25
-        elif result['roe'] > 10: score += 15
-        elif result['roe'] > 5: score += 5
+        if result['roe'] is not None:
+            max_score += 25
+            if result['roe'] > 15: score += 25
+            elif result['roe'] > 10: score += 15
+            elif result['roe'] > 5: score += 5
         
-        if result['gross_profit_margin'] > 30: score += 25
-        elif result['gross_profit_margin'] > 20: score += 15
-        elif result['gross_profit_margin'] > 10: score += 5
+        if result['gross_profit_margin'] is not None:
+            max_score += 25
+            if result['gross_profit_margin'] > 30: score += 25
+            elif result['gross_profit_margin'] > 20: score += 15
+            elif result['gross_profit_margin'] > 10: score += 5
         
-        if result['debt_ratio'] < 40: score += 25
-        elif result['debt_ratio'] < 60: score += 15
-        elif result['debt_ratio'] < 70: score += 5
+        if result['debt_ratio'] is not None:
+            max_score += 25
+            if result['debt_ratio'] < 40: score += 25
+            elif result['debt_ratio'] < 60: score += 15
+            elif result['debt_ratio'] < 70: score += 5
         
-        if result['revenue_yoy'] > 20: score += 25
-        elif result['revenue_yoy'] > 10: score += 15
-        elif result['revenue_yoy'] > 0: score += 5
+        if result['revenue_yoy'] is not None:
+            max_score += 25
+            if result['revenue_yoy'] > 20: score += 25
+            elif result['revenue_yoy'] > 10: score += 15
+            elif result['revenue_yoy'] > 0: score += 5
         
-        result['financial_score'] = score
+        # 按比例计算分数（基于有数据的字段）
+        if max_score > 0:
+            result['financial_score'] = int(score / max_score * 100)
+        else:
+            result['financial_score'] = 0
         
         if score >= 80:
             result['rating'] = '优秀'

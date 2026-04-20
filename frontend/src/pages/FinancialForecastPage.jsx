@@ -300,7 +300,7 @@ export default function FinancialForecastPage({ stocks }) {
                 <span className="metric-title">ROE</span>
               </div>
               <div className="metric-value primary">
-                {forecastData.roe ? `${forecastData.roe.toFixed(2)}%` : 'N/A'}
+                {forecastData.roe !== null && forecastData.roe !== undefined ? `${forecastData.roe.toFixed(2)}%` : 'N/A'}
               </div>
             </div>
             
@@ -310,7 +310,7 @@ export default function FinancialForecastPage({ stocks }) {
                 <span className="metric-title">毛利率</span>
               </div>
               <div className={`metric-value ${forecastData.gross_profit_margin >= 30 ? 'positive' : forecastData.gross_profit_margin >= 20 ? '' : 'negative'}`}>
-                {forecastData.gross_profit_margin ? `${forecastData.gross_profit_margin.toFixed(2)}%` : 'N/A'}
+                {forecastData.gross_profit_margin !== null && forecastData.gross_profit_margin !== undefined ? `${forecastData.gross_profit_margin.toFixed(2)}%` : 'N/A'}
               </div>
             </div>
             
@@ -320,7 +320,7 @@ export default function FinancialForecastPage({ stocks }) {
                 <span className="metric-title">净利润率</span>
               </div>
               <div className="metric-value">
-                {forecastData.net_profit_margin ? `${forecastData.net_profit_margin.toFixed(2)}%` : 'N/A'}
+                {forecastData.net_profit_margin !== null && forecastData.net_profit_margin !== undefined ? `${forecastData.net_profit_margin.toFixed(2)}%` : 'N/A'}
               </div>
             </div>
             
@@ -330,7 +330,7 @@ export default function FinancialForecastPage({ stocks }) {
                 <span className="metric-title">资产负债率</span>
               </div>
               <div className="metric-value negative">
-                {forecastData.debt_ratio ? `${forecastData.debt_ratio.toFixed(2)}%` : 'N/A'}
+                {forecastData.debt_ratio !== null && forecastData.debt_ratio !== undefined ? `${forecastData.debt_ratio.toFixed(2)}%` : 'N/A'}
               </div>
             </div>
             
@@ -340,7 +340,7 @@ export default function FinancialForecastPage({ stocks }) {
                 <span className="metric-title">营收增长</span>
               </div>
               <div className={`metric-value ${forecastData.revenue_yoy >= 0 ? 'positive' : 'negative'}`}>
-                {forecastData.revenue_yoy ? `${forecastData.revenue_yoy.toFixed(2)}%` : 'N/A'}
+                {forecastData.revenue_yoy !== null && forecastData.revenue_yoy !== undefined ? `${forecastData.revenue_yoy.toFixed(2)}%` : 'N/A'}
               </div>
             </div>
             
@@ -349,8 +349,8 @@ export default function FinancialForecastPage({ stocks }) {
                 <span className="metric-icon">⭐</span>
                 <span className="metric-title">财务评分</span>
               </div>
-              <div className="metric-value" style={{ color: forecastData.rating_color || '#667eea' }}>
-                {forecastData.financial_score || 0}/100
+              <div className="detail-value">
+                {forecastData.financial_score !== null && forecastData.financial_score !== undefined ? forecastData.financial_score : 0}/100
               </div>
               <div className="metric-detail" style={{ color: forecastData.rating_color || '#667eea' }}>
                 {forecastData.rating || '未评级'}
@@ -365,41 +365,41 @@ export default function FinancialForecastPage({ stocks }) {
               <div className="detail-item">
                 <div className="detail-label">ROA（资产回报率）</div>
                 <div className={`detail-value ${forecastData.roa > 10 ? 'success' : forecastData.roa < 5 ? 'danger' : ''}`}>
-                  {forecastData.roa ? `${forecastData.roa.toFixed(2)}%` : 'N/A'}
+                  {forecastData.roa !== null && forecastData.roa !== undefined ? `${forecastData.roa.toFixed(2)}%` : 'N/A'}
                 </div>
                 <div className="detail-desc">
-                  {forecastData.roa > 10 ? '优秀' : forecastData.roa < 5 ? '偏低' : '良好'}
+                  {forecastData.roa !== null && forecastData.roa !== undefined ? (forecastData.roa > 10 ? '优秀' : forecastData.roa < 5 ? '偏低' : '良好') : '无数据'}
                 </div>
               </div>
               
               <div className="detail-item">
                 <div className="detail-label">流动比率</div>
                 <div className={`detail-value ${forecastData.current_ratio > 2 ? 'success' : forecastData.current_ratio < 1 ? 'danger' : ''}`}>
-                  {forecastData.current_ratio ? forecastData.current_ratio.toFixed(2) : 'N/A'}
+                  {forecastData.current_ratio !== null && forecastData.current_ratio !== undefined ? forecastData.current_ratio.toFixed(2) : 'N/A'}
                 </div>
                 <div className="detail-desc">
-                  {forecastData.current_ratio > 2 ? '偿债能力强' : forecastData.current_ratio < 1 ? '偿债风险' : '正常'}
+                  {forecastData.current_ratio !== null && forecastData.current_ratio !== undefined ? (forecastData.current_ratio > 2 ? '偿债能力强' : forecastData.current_ratio < 1 ? '偿债风险' : '正常') : '无数据'}
                 </div>
               </div>
               
               <div className="detail-item">
                 <div className="detail-label">速动比率</div>
                 <div className="detail-value">
-                  {forecastData.quick_ratio ? forecastData.quick_ratio.toFixed(2) : 'N/A'}
+                  {forecastData.quick_ratio !== null && forecastData.quick_ratio !== undefined ? forecastData.quick_ratio.toFixed(2) : 'N/A'}
                 </div>
               </div>
               
               <div className="detail-item">
                 <div className="detail-label">每股收益（EPS）</div>
                 <div className="detail-value success">
-                  ¥{forecastData.eps ? forecastData.eps.toFixed(2) : 'N/A'}
+                  ¥{forecastData.eps !== null && forecastData.eps !== undefined ? forecastData.eps.toFixed(2) : 'N/A'}
                 </div>
               </div>
               
               <div className="detail-item highlight">
                 <div className="detail-label">每股净资产（BPS）</div>
                 <div className="detail-value">
-                  ¥{forecastData.bps ? forecastData.bps.toFixed(2) : 'N/A'}
+                  ¥{forecastData.bps !== null && forecastData.bps !== undefined ? forecastData.bps.toFixed(2) : 'N/A'}
                 </div>
                 <div className="detail-desc">股东权益</div>
               </div>
@@ -407,7 +407,7 @@ export default function FinancialForecastPage({ stocks }) {
               <div className="detail-item">
                 <div className="detail-label">净利润增长</div>
                 <div className={`detail-value trend-badge ${forecastData.profit_yoy > 20 ? 'success' : forecastData.profit_yoy < 0 ? 'danger' : ''}`}>
-                  {forecastData.profit_yoy ? `${forecastData.profit_yoy.toFixed(2)}%` : 'N/A'}
+                  {forecastData.profit_yoy !== null && forecastData.profit_yoy !== undefined ? `${forecastData.profit_yoy.toFixed(2)}%` : 'N/A'}
                 </div>
               </div>
             </div>
@@ -420,28 +420,28 @@ export default function FinancialForecastPage({ stocks }) {
               <div className="performance-card">
                 <div className="perf-label">存货周转率</div>
                 <div className="perf-value">
-                  {forecastData.inventory_turnover ? forecastData.inventory_turnover.toFixed(2) : 'N/A'}
+                  {forecastData.inventory_turnover !== null && forecastData.inventory_turnover !== undefined ? forecastData.inventory_turnover.toFixed(2) : 'N/A'}
                 </div>
               </div>
               
               <div className="performance-card">
                 <div className="perf-label">应收账款周转率</div>
                 <div className="perf-value">
-                  {forecastData.receivables_turnover ? forecastData.receivables_turnover.toFixed(2) : 'N/A'}
+                  {forecastData.receivables_turnover !== null && forecastData.receivables_turnover !== undefined ? forecastData.receivables_turnover.toFixed(2) : 'N/A'}
                 </div>
               </div>
               
               <div className="performance-card">
                 <div className="perf-label">总资产周转率</div>
                 <div className="perf-value">
-                  {forecastData.total_asset_turnover ? forecastData.total_asset_turnover.toFixed(2) : 'N/A'}
+                  {forecastData.total_asset_turnover !== null && forecastData.total_asset_turnover !== undefined ? forecastData.total_asset_turnover.toFixed(2) : 'N/A'}
                 </div>
               </div>
               
               <div className="performance-card">
                 <div className="perf-label">经营现金流</div>
                 <div className={`perf-value ${forecastData.operating_cash_flow >= 0 ? 'positive' : 'negative'}`}>
-                  {forecastData.operating_cash_flow ? `${(forecastData.operating_cash_flow / 10000).toFixed(2)}万` : 'N/A'}
+                  {forecastData.operating_cash_flow !== null && forecastData.operating_cash_flow !== undefined ? `${(forecastData.operating_cash_flow / 10000).toFixed(2)}万` : 'N/A'}
                 </div>
               </div>
             </div>
