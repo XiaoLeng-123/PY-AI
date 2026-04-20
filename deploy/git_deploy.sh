@@ -15,7 +15,9 @@ BLUE='\033[0;34m'
 NC='\033[0m'
 
 # 配置变量
+# 可设置环境变量覆盖：export GIT_REPO="你的仓库地址"
 GIT_REPO="${GIT_REPO:-https://github.com/XiaoLeng-123/PY-AI.git}"
+# 如果使用 Gitee，改为：https://gitee.com/你的用户名/PY-AI.git
 GIT_BRANCH="${GIT_BRANCH:-main}"
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
